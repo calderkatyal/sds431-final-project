@@ -1,0 +1,152 @@
+\documentclass{article}
+
+
+% if you need to pass options to natbib, use, e.g.:
+    \PassOptionsToPackage{numbers, compress}{natbib}
+% before loading neurips_2024
+
+
+% ready for submission
+% \usepackage{neurips_2024}
+
+
+% to compile a preprint version, e.g., for submission to arXiv, add the
+% [preprint] option:
+\usepackage[preprint]{neurips_2024}
+
+
+% to compile a camera-ready version, add the [final] option, e.g.:
+%     \usepackage[final]{neurips_2024}
+
+
+% to avoid loading the natbib package, add option nonatbib:
+%    \usepackage[nonatbib]{neurips_2024}
+
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{hyperref}       % hyperlinks
+\usepackage{url}            % simple URL typesetting
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsfonts}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{xcolor}         % colors
+\usepackage{makecell}
+
+%%%%%%%%%%%%%%%%%
+% manually added packages
+%%%%%%%%%%%%%%%%%
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{multirow}
+\usepackage{colortbl}
+\usepackage{wrapfig}
+\title{Convex Optimization Layers in Neural Architecture: A Survey}
+\raggedbottom
+
+
+\author{%
+  Calder K. Katyal\\
+  Undergraduate\\
+  Yale University\\
+  New Haven, CT 06511 \\
+  \texttt{calder.katyal@yale.edu} \\
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    The integration of optimization problems within neural network architectures represents a fundamental shift from traditional approaches to handling constraints in deep learning. While it is long known that neural networks can incorporate soft constraints with techniques such regularization, strict adherence to hard constraints is generally more difficult. A recent advance in this field, however, has addressed this problem by enabling the direct embedding of optimization layers as differentiable components within deep networks. This paper surveys the evolution and current state of this approach, from early implementations limited to quadratic programming to more recent frameworks supporting general convex optimization problems. We provide a comprehensive review of the theoretical foundations, practical implementations, and emerging applications of this technology. Our analysis includes detailed mathematical proofs, implementation guidelines, and an examination of various use cases that demonstrate the potential of this hybrid approach. This work synthesizes developments at the intersection of optimization theory and deep learning, offering insights into both current capabilities and future research directions in this rapidly evolving field. 
+\end{abstract}
+\section{Introduction}
+Imagine we want to train a model to play a game such as Sudoku given a set of input and output grids without explicit knowledge of the game's rules. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To encourage adherence to the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, the model will inevitably produce invalid solutions, and attempt to "guess" the rules of the task from the limited training data, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could construct a model that possesses an intuitive understanding of the rules of Sudoku, such that the training process is merely an opportunity to fine-tune parameters, we would expect better generalization. While the feedforward network is capable of enforce restrictions—take, for example, a softmax layer, which imposes a simplex constraint—there is no easy method to strictly enforce a set of complex hard constraints such as in Sudoku. \citet{optnet}
+
+\section{Theoretical Background}
+\subsection{Convex Optimization Fundamentals}
+
+\subsection{KKT Conditions for Convex Optimization Problems}
+
+The Karush-Kuhn-Tucker (KKT) conditions form a cornerstone of optimization theory, defining optimality criteria for constrained optimization problems. In the context of convex optimization, these conditions are both necessary and sufficient for optimality. Consider a convex optimization problem where we aim to minimize a convex objective function $f_0(\mathbf{x})$ subject to inequality constraints $f_i(\mathbf{x}) \leq 0$ and equality constraints $h_i(\mathbf{x}) = 0$. The problem can be expressed as:
+
+\begin{align*}
+    \text{Minimize } & \quad f_0(\mathbf{x}) \\
+    \text{subject to } & \quad f_i(\mathbf{x}) \leq 0, \quad i = 1, \dots, m, \\
+    & \quad h_i(\mathbf{x}) = 0, \quad i = 1, \dots, p.
+\end{align*}
+
+Here, the \textbf{primal problem} refers to this original formulation, while the \textbf{dual problem} arises by introducing Lagrange multipliers $\lambda_i$ (for $f_i$) and $\nu_i$ (for $h_i$), allowing us to construct a lower bound on the objective function. The dual problem maximizes this bound and provides insights into the sensitivity of the optimal solution to changes in the constraints. The KKT conditions unify these perspectives by characterizing the relationships between the primal and dual problems at optimality.
+
+\textbf{Theorem (KKT Conditions for Convex Problems):}  
+For the above convex optimization problem, where $f_0$ and $f_i$ are convex and $h_i$ are affine, a point $(\mathbf{x}^*, \lambda^*, \nu^*)$ is optimal if and only if the following conditions hold:
+\begin{enumerate}
+    \item \textbf{Primal feasibility:} $f_i(\mathbf{x}^*) \leq 0$ and $h_i(\mathbf{x}^*) = 0$ for all $i$.
+    \item \textbf{Dual feasibility:} $\lambda_i^* \geq 0$ for all $i$.
+    \item \textbf{Complementary slackness:} $\lambda_i^* f_i(\mathbf{x}^*) = 0$ for all $i$.
+    \item \textbf{Stationarity:}
+    \[
+    \nabla f_0(\mathbf{x}^*) + \sum_{i=1}^m \lambda_i^* \nabla f_i(\mathbf{x}^*) + \sum_{i=1}^p \nu_i^* \nabla h_i(\mathbf{x}^*) = 0.
+    \]
+\end{enumerate}
+
+For convex problems, these conditions are sufficient due to the strong duality property. The primal and dual solutions coincide at optimality, with the KKT conditions providing the necessary link between the two.
+
+\section{Convex Optimization Layers}
+
+\subsection{Quadratic Programming Layers in OptNet}
+
+\subsection{General Convex Programming}
+    \subsubsection{Disciplined Parametrized Programming}
+    \subsubsection{Affine-Solver-Affine Form}
+\subsection{Representational Power}
+
+\section{Implementation}
+
+alsjdlskajd
+\subsection{Computational Methods}
+    \subsubsection{Interior Point Methods}
+    \subsubsection{GPU-Based Solvers}
+\subsection{Software Integration}
+    \subsubsection{Deep Learning Frameworks}
+    \subsubsection{Performance Optimization}
+\subsection{Practical Considerations}
+
+\section{Applications}
+
+alkdjlajsd
+\subsection{Structured Prediction}
+\subsection{Control Systems}
+\subsection{Financial Optimization}
+\subsection{Machine Learning Models}
+
+\section{Future Directions}
+\subsection{Current Limitations}
+\subsection{Open Problems}
+\subsection{Research Opportunities}
+
+\begin{ack}
+Acknowledgments go here.
+\end{ack}
+
+\small
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+% References go here.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+
+\section{Appendix / supplemental material}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newpage
+
+
+
+\end{document}

@@ -14,7 +14,7 @@
 %     \usepackage[preprint]{neurips_2024}
 
 % to compile a camera-ready version, add the [final] option, e.g.:
-%     \usepackage[final]{neurips_2024}
+%     \usepackage[final]{neurips_2024} 
 
 % to avoid loading the natbib package, add option nonatbib:
 %     \usepackage[nonatbib]{neurips_2024}
@@ -37,40 +37,22 @@
 \title{S\&DS 431 Final Project Proposal}
 
 \author{%
-  Calder K. Katyal; Sebastien Lowy\\
-  Undergraduates\\
+  Calder K. Katyal\\
+  Undergraduate\\
   Yale University\\
   New Haven, CT 06511 \\
-  \texttt{calder.katyal.edu; sebastien.lowy@yale.edu} \\
+  \texttt{calder.katyal@yale.edu} \\
 }
 
 \begin{document}
 \maketitle
 
-\section{Original Research Goal}
+Until recently, constraints and optimization in neural networks have been handled indirectly through regularization, custom loss functions, separate solvers, and a variety of other methods that are generally agnostic to neural architecture. In \citet{optnet} researchers propose a model, OptNet, which directly integrates optimization problems as actual layers in deep neural networks. A novel architecture that incorporates quadratic programming (QP) optimization problems as differentiable layers within deep networks, OptNet enables end-to-end training while capturing complex constraints that traditional neural networks struggle to learn. Computational cost is minimized with a GPU-optimized custom solver which uses a primal-dual interior point method to produce backpropagation gradients with minimal overhead. The model exhibits a stunning understanding of hard constraints, learning to play mini-Sudoku from a set of games without even being provided the rules. 
 
-In this research project we propose a novel method to significantly reduce the computational cost of performing Djikstra's Shortest Path Algorithm in temporal graph data with dynamically evolving edge weights. In particular, we employ a Graph Neural Network (GNN) to predict edge importance scores and prune the graph at each timestep, significantly reducing the search space of Djikstra's algorithm. By incorporating node and edge level features as well as structural information into our model at each timestep, we can optimize Djikstra to real-world scenarios where graphs exhibit structured evolution. 
+Since the development of OptNet, others have sought to address one of its main challenges: that it assumes a fixed optimization structure and requires users to manually transform problems into a specific form (specifically, quadratic programs). \citet{differentiableconvexoptimizationlayers} develops a framework which allows users to define their optimization problems using a high-level grammar called disciplined parameterized programming (DPP), which extends the usual method of representing convex optimization problems and can be easily implemented in CVXPY. Using this grammar, a wide range of convex optimization problems, not just quadratic programs, can be integrated into different types of differentiable programs. 
 
-\section{Dataset}
-% Leave blank for now
+The goal of this project is to provide a comprehensive literature review of the integration of convex optimization problems inside neural architecture. We will explore its advantages and limitations, and also examine several use cases. We will also provide basic implementation details to make this method easily accessible to others in the field. Finally, we will rigorously explain and prove the mathematical theorems and intuition that underlie this method. This is a fascinating research frontier in Machine Learning that bridges the fields of optimization and neural networks, and we expect it to continue to grow as more use cases emerge.
 
-Possibility: https://www.microsoft.com/en-us/research/publication/t-drive-trajectory-data-sample/
-
-\section{Description of Related Works}
-% Leave blank for now
-
-\section{Proposed Approaches}
-% Leave blank for now
-
-\section{Research Questions and Hypothesis}
-% Leave blank for now
-
-\section{Evaluation Metrics and Expected Results}
-% Leave blank for now
-
-\FloatBarrier
-
-\newpage
 
 \small
 \bibliographystyle{plainnat}
