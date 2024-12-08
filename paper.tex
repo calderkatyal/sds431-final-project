@@ -43,6 +43,7 @@
 \usepackage{multirow}
 \usepackage{colortbl}
 \usepackage{wrapfig}
+\DeclareMathOperator*{\argmin}{arg\,min}
 \title{Convex Optimization Layers in Neural Architecture: A Survey}
 \raggedbottom
 
@@ -63,10 +64,156 @@
     The integration of optimization problems within neural network architectures represents a fundamental shift from traditional approaches to handling constraints in deep learning. While it is long known that neural networks can incorporate soft constraints with techniques such regularization, strict adherence to hard constraints is generally more difficult. A recent advance in this field, however, has addressed this problem by enabling the direct embedding of optimization layers as differentiable components within deep networks. This paper surveys the evolution and current state of this approach, from early implementations limited to quadratic programming to more recent frameworks supporting general convex optimization problems. We provide a comprehensive review of the theoretical foundations, practical implementations, and emerging applications of this technology. Our analysis includes detailed mathematical proofs, implementation guidelines, and an examination of various use cases that demonstrate the potential of this hybrid approach. This work synthesizes developments at the intersection of optimization theory and deep learning, offering insights into both current capabilities and future research directions in this rapidly evolving field. 
 \end{abstract}
 \section{Introduction}
-Imagine we want to train a model to play a game such as Sudoku given a set of input and output grids without explicit knowledge of the game's rules. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To encourage adherence to the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, the model will inevitably produce invalid solutions, and attempt to "guess" the rules of the task from the limited training data, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could construct a model that possesses an intuitive understanding of the rules of Sudoku, such that the training process is merely an opportunity to fine-tune parameters, we would expect better generalization. While the feedforward network is capable of enforce restrictions—take, for example, a softmax layer, which imposes a simplex constraint—there is no easy method to strictly enforce a set of complex hard constraints such as in Sudoku. \citet{optnet}
+Imagine we want to train a model to solve a structured task given a set of input and output sequences, without explicit knowledge of the constraints or rules involved. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To attempt to learn and conform with the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, without a perfectly tuned reward signal from the loss function, the model will tolerate invalid solutions, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could incorporate a learnable component into the model that intuitively learns the rules of the task and imposes the output to conform with them, we would expect improved generalization, as the constraints would be independent of specific input distributions and become globally optimized over the training process. However, there is no general mechanism for incorporating complex, learnable hard constraints in a vanilla feedforward network. Only simple constraints—such the simplex constraint in the Softmax layer—are easily enforced. To address this limitation, \citep{optnet} proposes a foundational method of embedding these constrainted optimization problems into the neural architecture as distinct layers. In this layer, the network can output the solution to the constrained optimization problems as part of its forward pass, where the constraints are parametrized by the previous layers; furthermore, it can propagate gradient information through these constraints in the backward pass to better understand the nature of the task. This allows the architecture to enforce either explicitly defined or implicitly learned hard constraints within an end-to-end differentiable framework. 
 
-\section{Theoretical Background}
-\subsection{Convex Optimization Fundamentals}
+In this survey, we focus on the development of convex optimization layers as a means to enforce hard constraints within neural network architectures, a capability that has traditionally been challenging to achieve. Starting with the pioneering work of \citep{optnet}, which introduced the embedding of quadratic programming layers, we trace the progression of this idea into more general convex optimization frameworks as in \citep{differentiableconvexoptimizationlayers}. We examine the mathematical principles that enable these layers to remain differentiable, the computational methods required for their efficient implementation, and the integration of these methods into existing neural network workflows. By exploring both theoretical advancements and practical applications, this survey aims to provide a deeper understanding of how convex optimization layers enhance the capacity of neural networks to solve structured problems while adhering to complex constraints. 
+
+\section{Background}
+
+The methods employed in these convex optimization layers are extensions of long-standing theory in the subject of convex optimization, the full treatment of which can be found in \citep{boyd2004convex}. The key to these models is to formulate a learnable optimization problem using the networks parameters and output a solution which can be fed into subsequent layers. The first technique developed for this was an adaptation of \textit{argmin differentiation} in which implicit differentiation is used to obtain the gradients from the Karush-Kuhn-Tucker (KKT) matrix associated with the problem. Subsequent works such as \citep{differentiableconvexoptimizationlayers} transform the problem into a cone problem and use the recently developed technique in \citep{conedifferentiation} to differentiate through the solution map of the cone program. Of course, as QPs are a subset of cone programs, this method is immediately transferable to the optimization layers in \citep{optnet}.
+
+\subsection{Convex Optimization}
+
+A convex optimization layer simply takes the form of a parameterized convex problem, where the output of the layer is the solution \(x^\star\) obtained by minimizing the objective function subject to the constraints.
+
+In particular, we define a (parametrized) convex problem as
+
+\begin{equation}
+\begin{aligned}
+    \text{minimize} \quad & f_0(x; \theta) \\
+    \text{subject to} \quad & f_i(x; \theta) \leq 0, \quad i = 1, \ldots, m, \\
+    & a_i^T x = b_i, \quad i = 1, \ldots, p,
+\end{aligned}
+\end{equation}
+
+where $f_0(x; \theta)$ and $f_i(x; \theta)$, $i = 1, \ldots, m$, are convex functions, and $a_i^T x - b_i$ are affine equality constraints \citep{boyd2004convex}. Here, $x \in \mathbb{R}^n$ is the optimization variable, $\theta \in \mathbb{R}^p$ is a parameter vector, and $a_i \in \mathbb{R}^n$, $b_i \in \mathbb{R}$. The feasible set of this problem is given by \[\mathcal{D} = \bigcap_{i=0}^m \text{dom}(f_i) \cap \bigcap_{i=1}^m \{x \mid f_i(x) \leq 0\} \cap \bigcap_{i=1}^p \{x \mid a_i^T x = b_i\}.
+\] and is convex as it is the intersection of convex sets. A convex optimization layer aims to optimize the parameters \(\theta\) such that the solution \(x^\star\), which is the optimal value determined by solving the convex optimization problem parameterized by \(\theta\), minimizes a scalar loss function \(L(x^\star; \theta)\). This ensures that \(\theta\) is learned in a way that aligns the solution \(x^\star\) with the overall task objectives encoded in \(L\), enabling the optimization layer to contribute effectively to the network. Before such a general formulation was considered, the original set of optimization problems as in \citep{optnet} were restricted to convex quadratic programs (QPs) of the form
+
+\begin{equation}
+\begin{aligned}
+    \text{minimize} \quad & \frac{1}{2} x^T P x + q^T x + r \\
+    \text{subject to} \quad & Gx \preceq h, \\
+                             & Ax = b,
+\end{aligned}
+\end{equation}
+
+where \(x \in \mathbb{R}^n\) is the optimization variable, \(P \in \mathbb{S}_+^n\) is a positive semidefinite matrix, \(q \in \mathbb{R}^n\), \(r \in \mathbb{R}\), \(G \in \mathbb{R}^{m \times n}\), \(h \in \mathbb{R}^m\), \(A \in \mathbb{R}^{p \times n}\), and \(b \in \mathbb{R}\), forming a polyhedral feasible set. 
+
+\subsection{Argmin Differentiation}
+
+The method of implicit differentiation used in \citep{optnet} builds of a technique called \textbf{argmin differentiation} that has been previously applied to differentiate through particular optimization problems. This technique was applied by \citep{gould2016differentiating} in solving a specific class of problems called bi-level optimization problems, e.g.
+
+\begin{equation}
+\begin{aligned}
+    &\text{minimize}_\mathbf{x}  \quad & f_U(\mathbf{x}, \mathbf{y})\\
+    &\text{subject to} \quad & y \in \argmin_{\mathbf{y'}} f^L(\mathbf{x},\mathbf{y'})
+\end{aligned}
+\end{equation}
+
+
+
+
+
+\newpage
+, allows us to differentiate through expressions of the form:
+
+\begin{equation}
+g(x) = \argmin_{y \in \mathbb{R}} f(x,y)
+\end{equation}
+
+where $f: \mathbb{R} \times \mathbb{R} \to \mathbb{R}$ is a continuous function with first and second derivatives. At any point where $g(x)$ exists uniquely, the following holds:
+
+\begin{equation}
+\frac{\partial f(x,y)}{\partial y}\bigg|_{y=g(x)} = 0
+\end{equation}
+
+By differentiating this optimality condition and applying the implicit function theorem, we get:
+
+\begin{equation}
+\frac{\partial^2 f}{\partial x \partial y} + \frac{\partial^2 f}{\partial y^2} \frac{dg}{dx} = 0
+\end{equation}
+
+Therefore:
+
+\begin{equation}
+\frac{dg}{dx} = -\frac{f_{XY}(x,g(x))}{f_{YY}(x,g(x))}
+\end{equation}
+
+where $f_{XY} = \frac{\partial^2 f}{\partial x \partial y}$ and $f_{YY} = \frac{\partial^2 f}{\partial y^2}$. For the vector-valued case where $x \in \mathbb{R}^n$, \citep{gould2016differentiating} show that:
+
+\begin{equation}
+g'(x) = -f_{YY}(x,g(x))^{-1}f_{XY}(x,g(x))
+\end{equation}
+
+For constrained optimization problems with equality and inequality constraints, \citep{gould2016differentiating} derive similar expressions by differentiating the KKT conditions, though the expressions become more complex due to the need to handle changes in the active set of constraints.
+
+
+\citep{optnet} use a technique called argmin differentiation that enables differentiating through optimization problems embedded within neural networks. To understand this technique, we first need to understand bi-level optimization and its relationship to deep learning.
+
+\subsection{Bi-level Optimization}
+Bi-level optimization problems involve two nested optimization tasks, historically arising from the Stackelberg model in economics where a leader and follower compete for market share. In machine learning, these problems take the form:
+\begin{align*}
+    \mathrm{minimize_x}  \quad & f_U(x, y) \\
+    \text{subject to} \quad & \mathbf{y} \in \argmin_{\mathbf{y'}} f_L(x,y')
+\end{align*}
+where $f_U$ and $f_L$ are the upper-level and lower-level objectives respectively. The notation $y \in \argmin_{y'} f_L(x,y')$ denotes that $y$ must be a minimizer of $f_L$ for any given $x$. This structure appears naturally in many machine learning scenarios, such as when:
+\begin{itemize}
+    \item Training a model that internally solves an optimization problem
+    \item Learning hyperparameters through cross-validation
+    \item Training with constraints that require optimization to enforce
+\end{itemize}
+
+\subsection{The Argmin Differentiation Framework}
+\citep{gould2016differentiating} developed a systematic framework for differentiating through these problems. Their key insight was that many learning tasks can be formulated as differentiating through an argmin operation:
+\begin{equation}
+    g(x) = \argmin_y f(x,y)
+\end{equation}
+where $g(x)$ maps parameters $x$ to the optimal solution $y$. To use such operations in gradient-based learning, we need to compute $\frac{dg}{dx}$.
+
+They presented three general approaches:
+
+\subsubsection{Analytical Solution Approach}
+The first approach seeks an explicit function $y^*(x)$ that solves the lower-level problem:
+\begin{equation}
+    \text{minimize}_x \quad f_U(x, y^*(x))
+\end{equation}
+This is ideal when possible but rarely exists for complex problems.
+
+\subsubsection{Optimality Conditions Approach}
+The second approach replaces the lower-level problem with optimality conditions:
+\begin{align*}
+    \text{minimize}_{x,y} \quad & f_U(x,y) \\
+    \text{subject to} \quad & h_L(x,y) = 0
+\end{align*}
+where $h_L(x,y)=0$ encodes the conditions (e.g., KKT conditions). However, these conditions can be difficult to solve.
+
+\subsubsection{Implicit Differentiation Approach}
+Their main contribution was showing how to differentiate through the argmin operation directly. For unconstrained problems, they proved:
+\begin{equation}
+    \frac{dg}{dx} = -\left(\frac{\partial^2 f}{\partial y^2}\right)^{-1}\frac{\partial^2 f}{\partial x \partial y}
+\end{equation}
+
+For equality-constrained problems of the form:
+\begin{align*}
+    g(x) = \argmin_y \quad & f(x,y) \\
+    \text{subject to} \quad & Ay = b
+\end{align*}
+they derived:
+\begin{equation}
+    \frac{dg}{dx} = -F(F^T H F)^{-1}F^T\frac{\partial^2 f}{\partial x \partial y}
+\end{equation}
+where $H = \frac{\partial^2 f}{\partial y^2}$ is the Hessian and $F$ spans the null space of $A$.
+
+\subsection{Limitations and Open Problems}
+While \citep{gould2016differentiating} established the mathematical foundations, several key challenges remained:
+
+1. \textbf{Inequality Constraints}: Their approach handled inequality constraints through barrier methods, which can be numerically unstable and computationally expensive. They add terms of the form $-\log(-f_i(x,y))$ to approximate constraints $f_i(x,y) \leq 0$, but this is an indirect solution.
+
+2. \textbf{Computational Efficiency}: The framework requires inverting Hessian matrices, which is expensive for large-scale problems. Methods for efficient implementation in deep learning frameworks were not addressed.
+
+3. \textbf{Practical Integration}: The paper focused on theoretical foundations but left open questions about how to effectively embed optimization layers within neural networks.
+
+These limitations were later addressed by \citep{optnet}, who developed direct methods for handling inequality constraints through KKT conditions and provided efficient implementations suitable for deep learning architectures.
 
 \subsection{KKT Conditions for Convex Optimization Problems}
 
