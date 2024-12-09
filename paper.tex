@@ -43,8 +43,11 @@
 \usepackage{multirow}
 \usepackage{colortbl}
 \usepackage{wrapfig}
+\newtheorem{theorem}{Theorem}
 \DeclareMathOperator*{\argmin}{arg\,min}
-\title{Convex Optimization Layers in Neural Architecture: A Survey}
+\DeclareUnicodeCharacter{221A}{\ensuremath{\sqrt{}}}
+\DeclareMathOperator{\diag}{diag}
+\title{Convex Optimization Layers in Neural Architectures: Foundations and Perspectives}
 \raggedbottom
 
 
@@ -64,6 +67,7 @@
     The integration of optimization problems within neural network architectures represents a fundamental shift from traditional approaches to handling constraints in deep learning. While it is long known that neural networks can incorporate soft constraints with techniques such regularization, strict adherence to hard constraints is generally more difficult. A recent advance in this field, however, has addressed this problem by enabling the direct embedding of optimization layers as differentiable components within deep networks. This paper surveys the evolution and current state of this approach, from early implementations limited to quadratic programming to more recent frameworks supporting general convex optimization problems. We provide a comprehensive review of the theoretical foundations, practical implementations, and emerging applications of this technology. Our analysis includes detailed mathematical proofs, implementation guidelines, and an examination of various use cases that demonstrate the potential of this hybrid approach. This work synthesizes developments at the intersection of optimization theory and deep learning, offering insights into both current capabilities and future research directions in this rapidly evolving field. 
 \end{abstract}
 \section{Introduction}
+\label{sec:intro}
 Imagine we want to train a model to solve a structured task given a set of input and output sequences, without explicit knowledge of the constraints or rules involved. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To attempt to learn and conform with the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, without a perfectly tuned reward signal from the loss function, the model will tolerate invalid solutions, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could incorporate a learnable component into the model that intuitively learns the rules of the task and imposes the output to conform with them, we would expect improved generalization, as the constraints would be independent of specific input distributions and become globally optimized over the training process. However, there is no general mechanism for incorporating complex, learnable hard constraints in a vanilla feedforward network. Only simple constraints—such the simplex constraint in the Softmax layer—are easily enforced. To address this limitation, \citep{optnet} proposes a foundational method of embedding these constrainted optimization problems into the neural architecture as distinct layers. In this layer, the network can output the solution to the constrained optimization problems as part of its forward pass, where the constraints are parametrized by the previous layers; furthermore, it can propagate gradient information through these constraints in the backward pass to better understand the nature of the task. This allows the architecture to enforce either explicitly defined or implicitly learned hard constraints within an end-to-end differentiable framework. 
 
 In this survey, we focus on the development of convex optimization layers as a means to enforce hard constraints within neural network architectures, a capability that has traditionally been challenging to achieve. Starting with the pioneering work of \citep{optnet}, which introduced the embedding of quadratic programming layers, we trace the progression of this idea into more general convex optimization frameworks as in \citep{differentiableconvexoptimizationlayers}. We examine the mathematical principles that enable these layers to remain differentiable, the computational methods required for their efficient implementation, and the integration of these methods into existing neural network workflows. By exploring both theoretical advancements and practical applications, this survey aims to provide a deeper understanding of how convex optimization layers enhance the capacity of neural networks to solve structured problems while adhering to complex constraints. 
@@ -101,123 +105,89 @@ where \(x \in \mathbb{R}^n\) is the optimization variable, \(P \in \mathbb{S}_+^
 
 \subsection{Argmin Differentiation}
 
-The method of implicit differentiation used in \citep{optnet} builds of a technique called \textbf{argmin differentiation} that has been previously applied to differentiate through particular optimization problems. This technique was applied by \citep{gould2016differentiating} in solving a specific class of problems called bi-level optimization problems, e.g.
+The method of implicit differentiation used in \citep{optnet} builds of a technique called \textbf{argmin differentiation} that has been previously applied to differentiate through particular optimization problems. The first major treatment of argmin differentiation in a general setting is found in \citep{gould2016differentiating}. While this approach provides theoretical groundwork for differentiating through optimization layers, it treats equality and inequality constraints separately, rather than handling them simultaneously. We briefly review their key results for three cases: unconstrained optimization problems, optimization problems with only equality constraints, and optimization problems with only inequality constraints. The proofs use results from calculus and are omitted here. 
+
+Consider the following general optimization problem: 
 
 \begin{equation}
-\begin{aligned}
-    &\text{minimize}_\mathbf{x}  \quad & f_U(\mathbf{x}, \mathbf{y})\\
-    &\text{subject to} \quad & y \in \argmin_{\mathbf{y'}} f^L(\mathbf{x},\mathbf{y'})
-\end{aligned}
+g(x) = \argmin_{y} f(x,y)
 \end{equation}
 
+where $f: \mathbb{R} \times \mathbb{R}^n \rightarrow \mathbb{R}$ is continuous and twice-differentiable. The general results found in \citep{gould2016differentiating} are provided below:
 
+\textbf{Unconstrained} 
 
-
-
-\newpage
-, allows us to differentiate through expressions of the form:
-
-\begin{equation}
-g(x) = \argmin_{y \in \mathbb{R}} f(x,y)
-\end{equation}
-
-where $f: \mathbb{R} \times \mathbb{R} \to \mathbb{R}$ is a continuous function with first and second derivatives. At any point where $g(x)$ exists uniquely, the following holds:
-
-\begin{equation}
-\frac{\partial f(x,y)}{\partial y}\bigg|_{y=g(x)} = 0
-\end{equation}
-
-By differentiating this optimality condition and applying the implicit function theorem, we get:
-
-\begin{equation}
-\frac{\partial^2 f}{\partial x \partial y} + \frac{\partial^2 f}{\partial y^2} \frac{dg}{dx} = 0
-\end{equation}
-
-Therefore:
-
-\begin{equation}
-\frac{dg}{dx} = -\frac{f_{XY}(x,g(x))}{f_{YY}(x,g(x))}
-\end{equation}
-
-where $f_{XY} = \frac{\partial^2 f}{\partial x \partial y}$ and $f_{YY} = \frac{\partial^2 f}{\partial y^2}$. For the vector-valued case where $x \in \mathbb{R}^n$, \citep{gould2016differentiating} show that:
+The gradient with respect to $x$ can be computed through implicit differentiation:
 
 \begin{equation}
 g'(x) = -f_{YY}(x,g(x))^{-1}f_{XY}(x,g(x))
 \end{equation}
 
-For constrained optimization problems with equality and inequality constraints, \citep{gould2016differentiating} derive similar expressions by differentiating the KKT conditions, though the expressions become more complex due to the need to handle changes in the active set of constraints.
+where $f_{YY} = \nabla^2_{yy}f(x,y)$ and $f_{XY} = \frac{\partial}{\partial x}\nabla_y f(x,y)$.
 
+\textbf{Equality-Constrained}
 
-\citep{optnet} use a technique called argmin differentiation that enables differentiating through optimization problems embedded within neural networks. To understand this technique, we first need to understand bi-level optimization and its relationship to deep learning.
+Suppose we equality constraints of the form $Ay = b$, where $A \in \mathbb{R}^{m \times n}$ and $b \in \mathbb{R}^m$. For the general case, let $y_0$ be any vector satisfying $Ay_0 = b$ and let $F$ be a matrix whose columns span the null-space of $A$. Then:
 
-\subsection{Bi-level Optimization}
-Bi-level optimization problems involve two nested optimization tasks, historically arising from the Stackelberg model in economics where a leader and follower compete for market share. In machine learning, these problems take the form:
-\begin{align*}
-    \mathrm{minimize_x}  \quad & f_U(x, y) \\
-    \text{subject to} \quad & \mathbf{y} \in \argmin_{\mathbf{y'}} f_L(x,y')
-\end{align*}
-where $f_U$ and $f_L$ are the upper-level and lower-level objectives respectively. The notation $y \in \argmin_{y'} f_L(x,y')$ denotes that $y$ must be a minimizer of $f_L$ for any given $x$. This structure appears naturally in many machine learning scenarios, such as when:
-\begin{itemize}
-    \item Training a model that internally solves an optimization problem
-    \item Learning hyperparameters through cross-validation
-    \item Training with constraints that require optimization to enforce
-\end{itemize}
-
-\subsection{The Argmin Differentiation Framework}
-\citep{gould2016differentiating} developed a systematic framework for differentiating through these problems. Their key insight was that many learning tasks can be formulated as differentiating through an argmin operation:
 \begin{equation}
-    g(x) = \argmin_y f(x,y)
-\end{equation}
-where $g(x)$ maps parameters $x$ to the optimal solution $y$. To use such operations in gradient-based learning, we need to compute $\frac{dg}{dx}$.
-
-They presented three general approaches:
-
-\subsubsection{Analytical Solution Approach}
-The first approach seeks an explicit function $y^*(x)$ that solves the lower-level problem:
-\begin{equation}
-    \text{minimize}_x \quad f_U(x, y^*(x))
-\end{equation}
-This is ideal when possible but rarely exists for complex problems.
-
-\subsubsection{Optimality Conditions Approach}
-The second approach replaces the lower-level problem with optimality conditions:
-\begin{align*}
-    \text{minimize}_{x,y} \quad & f_U(x,y) \\
-    \text{subject to} \quad & h_L(x,y) = 0
-\end{align*}
-where $h_L(x,y)=0$ encodes the conditions (e.g., KKT conditions). However, these conditions can be difficult to solve.
-
-\subsubsection{Implicit Differentiation Approach}
-Their main contribution was showing how to differentiate through the argmin operation directly. For unconstrained problems, they proved:
-\begin{equation}
-    \frac{dg}{dx} = -\left(\frac{\partial^2 f}{\partial y^2}\right)^{-1}\frac{\partial^2 f}{\partial x \partial y}
+g'(x) = -F(F^T f_{YY}(x,g(x))F)^{-1}F^T f_{XY}(x,g(x))
 \end{equation}
 
-For equality-constrained problems of the form:
-\begin{align*}
-    g(x) = \argmin_y \quad & f(x,y) \\
-    \text{subject to} \quad & Ay = b
-\end{align*}
-they derived:
+In particular, when $\text{rank}(A) = m$ ($A$ has full row rank), a direct approach yields:
 \begin{equation}
-    \frac{dg}{dx} = -F(F^T H F)^{-1}F^T\frac{\partial^2 f}{\partial x \partial y}
+g'(x) = (H^{-1}A^T(AH^{-1}A^T)^{-1}AH^{-1} - H^{-1})f_{XY}(x,g(x))
 \end{equation}
-where $H = \frac{\partial^2 f}{\partial y^2}$ is the Hessian and $F$ spans the null space of $A$.
+where $H = f_{YY}(x,g(x))$. 
 
-\subsection{Limitations and Open Problems}
-While \citep{gould2016differentiating} established the mathematical foundations, several key challenges remained:
+\textbf{Inequality-Constrained}
 
-1. \textbf{Inequality Constraints}: Their approach handled inequality constraints through barrier methods, which can be numerically unstable and computationally expensive. They add terms of the form $-\log(-f_i(x,y))$ to approximate constraints $f_i(x,y) \leq 0$, but this is an indirect solution.
+Suppose we have inequality constraints $f_i(x,y) \leq 0$, $i=1,\ldots,m$. Using the barrier method (see \citep{boyd2004convex} for a more comprehensive discussion), the constrained problem can be approximated as:
 
-2. \textbf{Computational Efficiency}: The framework requires inverting Hessian matrices, which is expensive for large-scale problems. Methods for efficient implementation in deep learning frameworks were not addressed.
+\begin{equation}
+\text{minimize}_y \quad tf_0(x,y) - \sum_{i=1}^m \log(-f_i(x,y))
+\end{equation}
 
-3. \textbf{Practical Integration}: The paper focused on theoretical foundations but left open questions about how to effectively embed optimization layers within neural networks.
+where $t > 0$ controls the approximation accuracy. The gradient can then be computed as:
 
-These limitations were later addressed by \citep{optnet}, who developed direct methods for handling inequality constraints through KKT conditions and provided efficient implementations suitable for deep learning architectures.
+\begin{equation}
+g'(x) \approx -(tf_{YY}(x,g(x)) + \phi_{YY}(x,g(x)))^{-1}(tf_{XY}(x,g(x)) + \phi_{XY}(x,g(x)))
+\end{equation}
 
-\subsection{KKT Conditions for Convex Optimization Problems}
+where $\phi(x,y) = \sum_{i=1}^m \log(-f_i(x,y))$ is the barrier function.
 
-The Karush-Kuhn-Tucker (KKT) conditions form a cornerstone of optimization theory, defining optimality criteria for constrained optimization problems. In the context of convex optimization, these conditions are both necessary and sufficient for optimality. Consider a convex optimization problem where we aim to minimize a convex objective function $f_0(\mathbf{x})$ subject to inequality constraints $f_i(\mathbf{x}) \leq 0$ and equality constraints $h_i(\mathbf{x}) = 0$. The problem can be expressed as:
+While providing a mathematical foundation for optimization layers, this approach lacks a unified treatment of mixed constraints. There are also other inefficiencies, such as the use of the barrier method as an approximation to the inequality-constrained case, which can be numerically unstable and computationally expensive. The inversion of the Hessian matrices in the equality-constrained case can furthermore be unsuited for large-scale problems. The more efficient technique of cone differentiation is discussed below. This new approach is shown to be general in \citep{differentiableconvexoptimizationlayers}, as a large subclass of convex optimization problems known as disciplined convex programming (DCP) problems admit reformulations as a cone problems. 
+
+\subsection{Differentiation Through Cone Programs}
+
+While argmin differentiation provides a theoretical foundation for differentiating through optimization problems, a more computationally efficient approach leverages the structure of cone programs. This procedure was developed in \citep{conedifferentiation} and is summarized here. The primal form of a cone program takes the form:
+\begin{equation}
+\begin{aligned}
+\text{minimize} \quad & c^T x \\
+\text{subject to} \quad & Ax + s = b \\
+                        & s \in K
+\end{aligned}
+\end{equation}
+
+where $K \subseteq \mathbb{R}^m$ is a proper convex cone (a convex set closed under positive scaling), $x \in \mathbb{R}^n$ is the primal optimization variable, and $s \in \mathbb{R}^m$ is a slack variable that captures inequality constraints. The Lagrangian function for this cone program is given by:
+\begin{equation}
+\mathcal{L}(x,s,y) = c^T x + y^T(Ax + s - b)
+\end{equation}
+Therefore, the dual optimization problem is of the form:
+\begin{equation}
+\begin{aligned}
+\text{maximize} \quad & -b^T y \\
+\text{subject to} \quad & A^T y + c = 0 \\
+                        & y \in K^*
+\end{aligned}
+\end{equation}
+
+where $y \in \mathbb{R}^m$ represents the dual variables and $K^* = {y \in \mathbb{R}^m : y^T x \geq 0 \text{ for all } x \in K}$ is the dual cone of $K$ (in particular, this is the set of all vectors \( y \) that form non-negative inner products with every vector \( x \) in the cone \( K \)). 
+
+The next step is to understand how optimal solutions depend on and change with problem parameters. To do this systematically, we need to derive the Karush-Kuhn-Tucker conditions for the system. 
+
+\subsubsection{KKT Conditions for Convex Optimization Problems}
+
+The Karush-Kuhn-Tucker (KKT) conditions form a cornerstone of optimization theory, defining optimality criteria for constrained optimization problems. The full treatment can be found in \citep{boyd2004convex}; the main results are summarized below. In the context of convex optimization, these conditions are both necessary and sufficient for optimality. Consider a convex optimization problem where we aim to minimize a convex objective function $f_0(\mathbf{x})$ subject to inequality constraints $f_i(\mathbf{x}) \leq 0$ and equality constraints $h_i(\mathbf{x}) = 0$. The problem can be expressed as:
 
 \begin{align*}
     \text{Minimize } & \quad f_0(\mathbf{x}) \\
@@ -227,7 +197,8 @@ The Karush-Kuhn-Tucker (KKT) conditions form a cornerstone of optimization theor
 
 Here, the \textbf{primal problem} refers to this original formulation, while the \textbf{dual problem} arises by introducing Lagrange multipliers $\lambda_i$ (for $f_i$) and $\nu_i$ (for $h_i$), allowing us to construct a lower bound on the objective function. The dual problem maximizes this bound and provides insights into the sensitivity of the optimal solution to changes in the constraints. The KKT conditions unify these perspectives by characterizing the relationships between the primal and dual problems at optimality.
 
-\textbf{Theorem (KKT Conditions for Convex Problems):}  
+\begin{theorem}[KKT Conditions for Convex Problems]
+\label{thm:kkt}
 For the above convex optimization problem, where $f_0$ and $f_i$ are convex and $h_i$ are affine, a point $(\mathbf{x}^*, \lambda^*, \nu^*)$ is optimal if and only if the following conditions hold:
 \begin{enumerate}
     \item \textbf{Primal feasibility:} $f_i(\mathbf{x}^*) \leq 0$ and $h_i(\mathbf{x}^*) = 0$ for all $i$.
@@ -238,14 +209,196 @@ For the above convex optimization problem, where $f_0$ and $f_i$ are convex and 
     \nabla f_0(\mathbf{x}^*) + \sum_{i=1}^m \lambda_i^* \nabla f_i(\mathbf{x}^*) + \sum_{i=1}^p \nu_i^* \nabla h_i(\mathbf{x}^*) = 0.
     \]
 \end{enumerate}
+\end{theorem}
 
-For convex problems, these conditions are sufficient due to the strong duality property. The primal and dual solutions coincide at optimality, with the KKT conditions providing the necessary link between the two.
+Furthermore, as long as there is one strictly feasible point, the primal and dual solutions coincide at optimality via Slater's condition, as strong duality is obtained.
 
-\section{Convex Optimization Layers}
+\subsubsection{Solution Map Decomposition}
 
-\subsection{Quadratic Programming Layers in OptNet}
+Thus, in the case of a cone program, we have that:
 
-\subsection{General Convex Programming}
+\begin{enumerate}
+    \item \textbf{Primal feasibility} is given by the primal constraints:
+    \[
+    A x + s = b, \quad s \in K,
+    \]
+
+    \item \textbf{Dual feasibility} is given by the dual constraints:
+    \[
+    A^T y + c = 0, \quad y \in K^*,
+    \]
+    
+    \item \textbf{Complementary slackness} is given by:
+    \[
+    s^T y = 0,
+    \]
+    which ensures that the slack variable \( s \) and the dual variable \( y \) are orthogonal, meaning \( s \) and \( y \) cannot both be strictly positive at any point.
+
+    \item The \textbf{stationary} condition is equivalent to the dual feasibility condition, as it is given by:
+    \[
+    \nabla_x \mathcal{L}(x, s, y) = c + A^T y = 0,
+    \]
+\end{enumerate}
+
+Thus the solution map to the primal-dual conic program is of the form 
+\[
+S: \mathbb{R}^{m \times n} \times \mathbb{R}^m \times \mathbb{R}^n \to \mathbb{R}^n \times \mathbb{R}^m \times \mathbb{R}^m,
+\]
+\[
+\text{where } S(A, b, c) = (x^*, y^*, s^*) \in 
+\left\{
+\begin{aligned}
+    & (x, y, s) \mid A x + s = b, \; A^T y + c = 0, \\
+    & s \in K, \; y \in K^*, \; s^T y = 0
+\end{aligned}
+\right\}
+\]
+
+In particular, we aim to find the derivative of the solution map \(S\) with respect to the problem data \((A, b, c)\), denoted DS(A, b, c). To do this, decompose the solution map \(S: (A,b,c) \mapsto (x,y,s)\) into three components: \(S = \phi \circ \psi \circ Q\), where
+
+\[
+Q : \mathbb{R}^{m \times n} \times \mathbb{R}^m \times \mathbb{R}^n \to \mathcal{Q}
+\]
+\[
+s : \mathcal{Q} \to \mathbb{R}^N
+\]
+\[
+\phi : \mathbb{R}^N \to \mathbb{R}^n \times \mathbb{R}^m \times \mathbb{R}^m
+\]In this formulation, $Q$ maps the problem data to a skew-symmetric matrix (a matrix where \(Q = -Q^T\)) that encodes the problem structure:
+\begin{equation}
+Q(A,b,c) = \begin{pmatrix} 
+0 & A^T & c \\
+-A & 0 & b \\
+-c^T & -b^T & 0
+\end{pmatrix}.
+\end{equation}
+
+Furthermore, $s$ yields a solution to the so-called homogeneous self-dual embedding introduced in \citep{Yeselfdualemb} and \citep{Xuselfdualemb}, which a mathematical formulation  that transforms a primal-dual optimization problem into a single system of equations. In particular, solving this system ensures that the resulting solution satisfies all the primal-dual KKT conditions. Finally, $\phi$ maps a solution of the homogeneous self-dual embedding to the solution of the primal-dual pair. 
+
+By the chain rule, we have 
+
+\[
+DS(A, b, c) = D\phi(z) \, Ds(Q) \, DQ(A, b, c).
+\]
+
+To compute the derivative of the solution map $DS(A,b,c)$, the authors utilize three key transformations ensure mathematical tractability. The first step maps the problem data perturbations $(dA,db,dc)$ into a skew-symmetric matrix $dQ$ by directly arranging them into the corresponding block structure, preserving the critical skew-symmetric property required for feasibility. The most challenging component is computing $Ds$ - this requires solving a large linear system $Mdz = -g$ that encodes how these perturbations affect the solution. Here $M = ((Q-I)D\Pi(z)+I)/w$ combines the problem matrices with projection derivatives, scaled by the solution parameter $w$. The vector $g = dQ\Pi(z/|w|)$ represents how perturbations affect the normalized residual map that measures optimality. Since directly forming and inverting $M$ would be computationally infeasible for large problems, the authors employ LSQR (Least Squares QR) - an iterative method introduced in \citep{lsqr}. LSQR gradually builds up the solution by combining QR matrix factorization with a technique called bidiagonalization, requiring only matrix-vector products rather than storing or inverting the full matrix $M$. The final transformation $D\phi$ converts the computed changes $dz$ into perturbations in the optimization variables $(dx,dy,ds)$ through carefully constructed projections onto the dual cone. For computing derivatives in the backward pass needed for deep learning, this process is reversed using the same efficient numerical techniques. The authors demonstrate this approach scales to problems with millions of variables through an efficient implementation avoiding any explicit matrix operations.
+
+\section{OptNet: Integrating QP Layers Into Neural Architecture}
+We begin our discussion of convex optimization layers by deriving the key results in \citep{optnet}, the first major attempt to integrate such layers into neural networks in an end-to-end fashion. The goal is to make the mathematical theory underpinning them rigorous and explore the intuition behind the various components. 
+
+The general idea in \citep{optnet} cast a convex QP as an optimization layer, where the output of the layer $z_{i+1}$ is the solution of the problem and the constraints are parametrized by the output of the previous layer $z_i$. In particular, for optimization variable $z \in \mathbb{R}^n$, we have: 
+
+\[
+z_{i+1} = \argmin_{z} \frac{1}{2} z^T Q(z_i) z + q(z_i)^T z
+\]
+\[
+\text{subject to} \quad A(z_i) z = b(z_i), \quad G(z_i) z \leq h(z_i).
+\]
+
+where \( Q \in \mathbb{R}^{n \times n} \succeq 0 \) ensures convexity of the objective, and \( q \in \mathbb{R}^n \), 
+\( A(z_i) \in \mathbb{R}^{m \times n} \), \( b(z_i) \in \mathbb{R}^m \), \( G(z_i) \in \mathbb{R}^{p \times n} \), and \( h(z_i) \in \mathbb{R}^p \) are problem data. 
+
+The first step is constructing the Lagrangian. For notational clarity, we temporarily suppress the $z_i$ dependence for the rest of the analysis:
+
+\[
+L(z,\nu,\lambda) = \frac{1}{2}z^T Q z + q^T z + \nu^T(Az - b) + \lambda^T(Gz - h)
+\]
+
+where $\nu \in \mathbb{R}^m, \lambda \in \mathbb{R}^p$ are dual variables and $\lambda \geq 0$. By \ref{thm:kkt}, the optimal solution $(z^*, \nu^*, \lambda^*)$ must satisfy: 
+
+\begin{enumerate}
+    \item \textbf{Primal feasibility:} \\
+    The primal variables $z^*$ must satisfy the equality and inequality constraints:
+    \[
+    Az^* = b, \quad Gz^* \leq h.
+    \]
+
+    \item \textbf{Dual feasibility:} \\
+    As we already noted, the dual variables $\lambda^*$ must be non-negative, because they are associated with inequality constraints:
+    \[
+    \lambda^* \geq 0.
+    \]
+
+    \item \textbf{Complementary slackness:} \\
+    For each inequality constraint, either the constraint is active ($Gz^* = h$) or the corresponding dual variable is zero ($\lambda^* = 0$):
+    \[
+    \lambda_i^* (Gz^* - h)_i = 0 \quad \forall i \in \{1, \ldots, p\}.
+    \]
+
+    \item \textbf{Stationarity:} \\
+    The gradient of the Lagrangian with respect to the primal variables $z$ must vanish:
+    \[
+    \nabla_z L(z^*, \nu^*, \lambda^*) = Qz^* + q + A^T\nu^* + G^T\lambda^* = 0.
+    \]
+\end{enumerate}
+
+Vectorizing the conditions and noting that the stationary condition encompasses the primal feasibility requirement $Gz^* \leq h$, the necessary and sufficient conditions for optimality (given $\lambda \geq 0)$ are: 
+
+\begin{equation}
+    \begin{aligned}
+        Qz^* + q + A^T\nu^* + G^T\lambda^* = 0 \\
+        Az^* - b = 0\\
+        \diag({\lambda_i^*})(Gz^* - h)_i = 0
+    \end{aligned}
+\end{equation}
+
+To approximate how the solution $(z^*, \nu^*, \lambda^*)$ changes with respect to perturbations in the problem parameters, we take the differential:
+
+
+\begin{equation}
+    \begin{aligned}
+        dQ z^* + Q dz + dq + dA^T \nu^* + A^T d\nu + dG^T \lambda^* + G^T d\lambda &= 0, \\
+        dA z^* + A dz - db &= 0, \\
+        \diag(\lambda^*) d(Gz^* - h) + \diag(Gz^* - h) d\lambda &= 0,
+    \end{aligned}
+\end{equation}
+
+Which admits the matrix formulation:
+
+\begin{equation}
+    \begin{bmatrix}
+        Q & G^T & A^T \\
+        \diag(\lambda^*) G & \diag(Gz^* - h) & 0 \\
+        A & 0 & 0
+    \end{bmatrix}
+    \begin{bmatrix}
+        dz \\
+        d\lambda \\
+        d\nu
+    \end{bmatrix}
+    =
+    -\begin{bmatrix}
+        dQ z^* + dq + dG^T \lambda^* + dA^T \nu^* \\
+        \diag(\lambda^*) dG z^* - \diag(\lambda^*) dh \\
+        dA z^* - db
+    \end{bmatrix}
+\end{equation}
+
+Starting with our KKT differential system:
+\begin{equation}
+    \begin{bmatrix}
+        Q & G^T & A^T \\
+        \diag(\lambda^*) G & \diag(Gz^* - h) & 0 \\
+        A & 0 & 0
+    \end{bmatrix}
+    \begin{bmatrix}
+        dz \\
+        d\lambda \\
+        d\nu
+    \end{bmatrix}
+    =
+    -\begin{bmatrix}
+        dQ z^* + dq + dG^T \lambda^* + dA^T \nu^* \\
+        \diag(\lambda^*) dG z^* - \diag(\lambda^*) dh \\
+        dA z^* - db
+    \end{bmatrix}
+\end{equation}
+
+
+
+\subsection{Generalization to Convex Programming Layers and Key Adaptations}
+
+We will consider the limitations of the model and how they were addressed in the subsequent major work on the topic \citep{differentiableconvexoptimizationlayers}.
     \subsubsection{Disciplined Parametrized Programming}
     \subsubsection{Affine-Solver-Affine Form}
 \subsection{Representational Power}
