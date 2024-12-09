@@ -195,7 +195,7 @@ The Karush-Kuhn-Tucker (KKT) conditions form a cornerstone of optimization theor
     & \quad h_i(\mathbf{x}) = 0, \quad i = 1, \dots, p.
 \end{align*}
 
-Here, the \textbf{primal problem} refers to this original formulation, while the \textbf{dual problem} arises by introducing Lagrange multipliers $\lambda_i$ (for $f_i$) and $\nu_i$ (for $h_i$), allowing us to construct a lower bound on the objective function. The dual problem maximizes this bound and provides insights into the sensitivity of the optimal solution to changes in the constraints. The KKT conditions unify these perspectives by characterizing the relationships between the primal and dual problems at optimality.
+Here, the \textbf{primal problem} refers to this original formulation, while the \textbf{dual problem} arises by introducing Lagrange multipliers $\lambda_i$ (for $f_i$) and $\nu_i$ (for $h_i$), allowing us to construct a lower bound on the objective function. The dual problem maximizes this bound and provides insights into the sensitivity of the optimal solution to changes in the constraints. The KKT conditions unify these perspectives by characterizing the relationships between the primal and dual problems at optimality. The following theorem is a standard result in convex optimization:
 
 \begin{theorem}[KKT Conditions for Convex Problems]
 \label{thm:kkt}
@@ -284,7 +284,9 @@ DS(A, b, c) = D\phi(z) \, Ds(Q) \, DQ(A, b, c).
 To compute the derivative of the solution map $DS(A,b,c)$, the authors utilize three key transformations ensure mathematical tractability. The first step maps the problem data perturbations $(dA,db,dc)$ into a skew-symmetric matrix $dQ$ by directly arranging them into the corresponding block structure, preserving the critical skew-symmetric property required for feasibility. The most challenging component is computing $Ds$ - this requires solving a large linear system $Mdz = -g$ that encodes how these perturbations affect the solution. Here $M = ((Q-I)D\Pi(z)+I)/w$ combines the problem matrices with projection derivatives, scaled by the solution parameter $w$. The vector $g = dQ\Pi(z/|w|)$ represents how perturbations affect the normalized residual map that measures optimality. Since directly forming and inverting $M$ would be computationally infeasible for large problems, the authors employ LSQR (Least Squares QR) - an iterative method introduced in \citep{lsqr}. LSQR gradually builds up the solution by combining QR matrix factorization with a technique called bidiagonalization, requiring only matrix-vector products rather than storing or inverting the full matrix $M$. The final transformation $D\phi$ converts the computed changes $dz$ into perturbations in the optimization variables $(dx,dy,ds)$ through carefully constructed projections onto the dual cone. For computing derivatives in the backward pass needed for deep learning, this process is reversed using the same efficient numerical techniques. The authors demonstrate this approach scales to problems with millions of variables through an efficient implementation avoiding any explicit matrix operations.
 
 \section{OptNet: Integrating QP Layers Into Neural Architecture}
-We begin our discussion of convex optimization layers by deriving the key results in \citep{optnet}, the first major attempt to integrate such layers into neural networks in an end-to-end fashion. The goal is to make the mathematical theory underpinning them rigorous and explore the intuition behind the various components. 
+We begin our discussion of convex optimization layers by deriving the key results in \citep{optnet}, the first major attempt to integrate such layers into neural networks in an end-to-end fashion. The goal is to make the mathematical theory underpinning them rigorous and explore the intuition behind the various components. We will then discuss the expressive power of these layers, and conclude with a discussion of their limitations. 
+
+\subsection{OptNet: Method}
 
 The general idea in \citep{optnet} cast a convex QP as an optimization layer, where the output of the layer $z_{i+1}$ is the solution of the problem and the constraints are parametrized by the output of the previous layer $z_i$. In particular, for optimization variable $z \in \mathbb{R}^n$, we have: 
 
@@ -374,33 +376,66 @@ Which admits the matrix formulation:
     \end{bmatrix}
 \end{equation}
 
-Starting with our KKT differential system:
+Note that the goal is not to explicitly calculate the Jacobian matrices with respect to the parameters (e.g.$\frac{\partial z^*}{\partial b} \in \mathbb{R}^{n \times m}$), but rather to compute the Jacobian-vector products used in backpropogation (e.g. $\frac{\partial \ell}{\partial z^*} \frac{\partial z^*}{\partial b}$). This avoids explicitly constructing large Jacobian matrices.
+To efficiently compute the Jacobian-vector product required in the backward pass, the differential conditions can be leveraged. 
+
+The directional derivatives needed in the chain rule can be found by noting that only $\frac{\partial \ell}{\partial z^*}$ is relevant for propogating gradients and is agnostic to perturbations in the constraints. Therefore, we can write: 
+
 \begin{equation}
-    \begin{bmatrix}
-        Q & G^T & A^T \\
-        \diag(\lambda^*) G & \diag(Gz^* - h) & 0 \\
-        A & 0 & 0
-    \end{bmatrix}
-    \begin{bmatrix}
-        dz \\
-        d\lambda \\
-        d\nu
-    \end{bmatrix}
-    =
-    -\begin{bmatrix}
-        dQ z^* + dq + dG^T \lambda^* + dA^T \nu^* \\
-        \diag(\lambda^*) dG z^* - \diag(\lambda^*) dh \\
-        dA z^* - db
-    \end{bmatrix}
+\begin{bmatrix}
+d_z \\
+d_\lambda \\
+d_\nu
+\end{bmatrix}
+=
+-
+\begin{bmatrix}
+Q & G^\top \diag(\lambda^*) & A^\top \\
+G & \diag(Gz^* - h) & 0 \\
+A & 0 & 0
+\end{bmatrix}^{-1}
+\begin{bmatrix}
+\frac{\partial \ell}{\partial z^*} \\
+0 \\
+0
+\end{bmatrix}.
 \end{equation}
 
 
+The gradient updates are given by: 
+\begin{equation}
+    \begin{aligned}
+        \nabla_Q \ell &= \frac{1}{2}\left(d_z z^{*\top} + z^* d_z^\top\right), \\
+        \nabla_A \ell &= d_\nu z^{*\top} + \nu^* d_z^\top, \\
+        \nabla_G \ell &= \diag(\lambda^*)d_\lambda z^{*\top} + \lambda^* d_z^\top, \\
+        \nabla_q \ell &= d_z, \\
+        \nabla_b \ell &= -d_\nu, \\
+        \nabla_h \ell &= -\diag(\lambda^*) d_\lambda.
+    \end{aligned}
+\end{equation}
 
-\subsection{Generalization to Convex Programming Layers and Key Adaptations}
+The authors implement a batched QP solver to make the approach practical for deep learning. Standard solvers like Gurobi and CPLEX, while optimal for solving individual QPs, process QPs sequentially on CPUs. This creates a massive bottleneck when applied to mini-batches in neural networks. To address this, the authors developed a GPU-bound solver that solves all QPs in a mini-batch in parallel, dramatically improving efficiency.
+
+The computational bottleneck lies in factorizing the KKT matrix, which encodes the relationships between the primal and dual variables as well as the constraints. This factorization is necessary because it allows efficient solving of the linear systems required by the primal-dual interior point method. The complexity of factorization is cubic (\( \mathcal{O}(n^3) \)) in the number of variables, but once computed during the forward pass, it is reused to solve linear systems during backpropagation, which has quadratic complexity (\( \mathcal{O}(n^2) \)).
+
+The GPU-based solver exploits parallelism by solving all QPs in the mini-batch simultaneously. For a batch size of \( N \), the parallel implementation reduces the overall complexity to \( \mathcal{O}(n^3 + N n^2) \), compared to the sequential cost of \( \mathcal{O}(N n^3) \) with CPU-based solvers. By sharing the expensive KKT factorization across the batch, the approach ensures both forward and backward passes are computationally efficient and scalable to large mini-batches, making it feasible for end-to-end training in deep learning systems.
+
+ The full details are found in \citep{optnet}, and the solver is based on a primal-dual interior point method developed in \citep{mattingley2012cvxgen}.
+
+\subsection{OptNet: Expressivity}
+
+A key benefit of these layers is their expressive power. The key results obtained in the paper are summarized and proved here:
+
+\begin{theorem}
+    
+\end{theorem}
+
+\section{Generalization to Convex Programming Layers and Key Adaptations}
 
 We will consider the limitations of the model and how they were addressed in the subsequent major work on the topic \citep{differentiableconvexoptimizationlayers}.
-    \subsubsection{Disciplined Parametrized Programming}
-    \subsubsection{Affine-Solver-Affine Form}
+    \subsection{Disciplined Parametrized Programming}
+    slka
+    \subsection{Affine-Solver-Affine Form}
 \subsection{Representational Power}
 
 \section{Implementation}
