@@ -41,12 +41,14 @@
 \usepackage{amsmath}
 \usepackage{mathtools}
 \usepackage{multirow}
+\usepackage{amsthm}
 \usepackage{colortbl}
 \usepackage{wrapfig}
 \newtheorem{theorem}{Theorem}
 \DeclareMathOperator*{\argmin}{arg\,min}
 \DeclareUnicodeCharacter{221A}{\ensuremath{\sqrt{}}}
 \DeclareMathOperator{\diag}{diag}
+
 \title{Convex Optimization Layers in Neural Architectures: Foundations and Perspectives}
 \raggedbottom
 
@@ -68,13 +70,14 @@
 \end{abstract}
 \section{Introduction}
 \label{sec:intro}
-Imagine we want to train a model to solve a structured task given a set of input and output sequences, without explicit knowledge of the constraints or rules involved. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To attempt to learn and conform with the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, without a perfectly tuned reward signal from the loss function, the model will tolerate invalid solutions, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could incorporate a learnable component into the model that intuitively learns the rules of the task and imposes the output to conform with them, we would expect improved generalization, as the constraints would be independent of specific input distributions and become globally optimized over the training process. However, there is no general mechanism for incorporating complex, learnable hard constraints in a vanilla feedforward network. Only simple constraints—such the simplex constraint in the Softmax layer—are easily enforced. To address this limitation, \citep{optnet} proposes a foundational method of embedding these constrainted optimization problems into the neural architecture as distinct layers. In this layer, the network can output the solution to the constrained optimization problems as part of its forward pass, where the constraints are parametrized by the previous layers; furthermore, it can propagate gradient information through these constraints in the backward pass to better understand the nature of the task. This allows the architecture to enforce either explicitly defined or implicitly learned hard constraints within an end-to-end differentiable framework. 
+Imagine we want to train a model to solve a structured task given a set of input and output sequences, without explicit knowledge of the constraints or rules involved. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To attempt to learn and conform with the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, without a perfectly tuned reward signal from the loss function, the model will tolerate invalid solutions, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could incorporate a learnable component into the model that intuitively learns the rules of the task and imposes the output to conform with them, we would expect improved generalization, as the constraints would be independent of specific input distributions and become globally optimized over the training process. However, there is no general mechanism for incorporating complex, learnable hard constraints in a vanilla feedforward network. Only simple constraints—such the simplex constraint in the Softmax layer—are easily enforced. To address this limitation, \citet{optnet} proposes a foundational method of embedding these constrainted optimization problems into the neural architecture as distinct layers. In this layer, the network can output the solution to the constrained optimization problems as part of its forward pass, where the constraints are parametrized by the previous layers; furthermore, it can propagate gradient information through these constraints in the backward pass to better understand the nature of the task. This allows the architecture to enforce either explicitly defined or implicitly learned hard constraints within an end-to-end differentiable framework. 
 
-In this survey, we focus on the development of convex optimization layers as a means to enforce hard constraints within neural network architectures, a capability that has traditionally been challenging to achieve. Starting with the pioneering work of \citep{optnet}, which introduced the embedding of quadratic programming layers, we trace the progression of this idea into more general convex optimization frameworks as in \citep{differentiableconvexoptimizationlayers}. We examine the mathematical principles that enable these layers to remain differentiable, the computational methods required for their efficient implementation, and the integration of these methods into existing neural network workflows. By exploring both theoretical advancements and practical applications, this survey aims to provide a deeper understanding of how convex optimization layers enhance the capacity of neural networks to solve structured problems while adhering to complex constraints. 
+In this survey, we focus on the development of convex optimization layers as a means to enforce hard constraints within neural network architectures, a capability that has traditionally been challenging to achieve. Starting with the pioneering work of \citet{optnet}, which introduced the embedding of quadratic programming layers, we trace the progression of this idea into more general convex optimization frameworks as in \citet{differentiableconvexoptimizationlayers}. We examine the mathematical principles that enable these layers to remain differentiable, the computational methods required for their efficient implementation, and the integration of these methods into existing neural network workflows. By exploring both theoretical advancements and practical applications, this survey aims to provide a deeper understanding of how convex optimization layers enhance the capacity of neural networks to solve structured problems while adhering to complex constraints. 
+
 
 \section{Background}
 
-The methods employed in these convex optimization layers are extensions of long-standing theory in the subject of convex optimization, the full treatment of which can be found in \citep{boyd2004convex}. The key to these models is to formulate a learnable optimization problem using the networks parameters and output a solution which can be fed into subsequent layers. The first technique developed for this was an adaptation of \textit{argmin differentiation} in which implicit differentiation is used to obtain the gradients from the Karush-Kuhn-Tucker (KKT) matrix associated with the problem. Subsequent works such as \citep{differentiableconvexoptimizationlayers} transform the problem into a cone problem and use the recently developed technique in \citep{conedifferentiation} to differentiate through the solution map of the cone program. Of course, as QPs are a subset of cone programs, this method is immediately transferable to the optimization layers in \citep{optnet}.
+The methods employed in these convex optimization layers are extensions of long-standing theory in the subject of convex optimization, the full treatment of which can be found in \citet{boyd2004convex}. The key to these models is to formulate a learnable optimization problem using the networks parameters and output a solution which can be fed into subsequent layers. The first technique developed for this was an adaptation of \textit{argmin differentiation} in which implicit differentiation is used to obtain the gradients from the Karush-Kuhn-Tucker (KKT) matrix associated with the problem. Subsequent works such as \citet{differentiableconvexoptimizationlayers} transform the problem into a cone problem and use the recently developed technique in \citet{conedifferentiation} to differentiate through the solution map of the cone program. Of course, as QPs are a subset of cone programs, this method is immediately transferable to the optimization layers in \citet{optnet}.
 
 \subsection{Convex Optimization}
 
@@ -90,8 +93,8 @@ In particular, we define a (parametrized) convex problem as
 \end{aligned}
 \end{equation}
 
-where $f_0(x; \theta)$ and $f_i(x; \theta)$, $i = 1, \ldots, m$, are convex functions, and $a_i^T x - b_i$ are affine equality constraints \citep{boyd2004convex}. Here, $x \in \mathbb{R}^n$ is the optimization variable, $\theta \in \mathbb{R}^p$ is a parameter vector, and $a_i \in \mathbb{R}^n$, $b_i \in \mathbb{R}$. The feasible set of this problem is given by \[\mathcal{D} = \bigcap_{i=0}^m \text{dom}(f_i) \cap \bigcap_{i=1}^m \{x \mid f_i(x) \leq 0\} \cap \bigcap_{i=1}^p \{x \mid a_i^T x = b_i\}.
-\] and is convex as it is the intersection of convex sets. A convex optimization layer aims to optimize the parameters \(\theta\) such that the solution \(x^\star\), which is the optimal value determined by solving the convex optimization problem parameterized by \(\theta\), minimizes a scalar loss function \(L(x^\star; \theta)\). This ensures that \(\theta\) is learned in a way that aligns the solution \(x^\star\) with the overall task objectives encoded in \(L\), enabling the optimization layer to contribute effectively to the network. Before such a general formulation was considered, the original set of optimization problems as in \citep{optnet} were restricted to convex quadratic programs (QPs) of the form
+where $f_0(x; \theta)$ and $f_i(x; \theta)$, $i = 1, \ldots, m$, are convex functions, and $a_i^T x - b_i$ are affine equality constraints \citet{boyd2004convex}. Here, $x \in \mathbb{R}^n$ is the optimization variable, $\theta \in \mathbb{R}^p$ is a parameter vector, and $a_i \in \mathbb{R}^n$, $b_i \in \mathbb{R}$. The feasible set of this problem is given by \[\mathcal{D} = \bigcap_{i=0}^m \text{dom}(f_i) \cap \bigcap_{i=1}^m \{x \mid f_i(x) \leq 0\} \cap \bigcap_{i=1}^p \{x \mid a_i^T x = b_i\}.
+\] and is convex as it is the intersection of convex sets. A convex optimization layer aims to optimize the parameters \(\theta\) such that the solution \(x^\star\), which is the optimal value determined by solving the convex optimization problem parameterized by \(\theta\), minimizes a scalar loss function \(L(x^\star; \theta)\). This ensures that \(\theta\) is learned in a way that aligns the solution \(x^\star\) with the overall task objectives encoded in \(L\), enabling the optimization layer to contribute effectively to the network. Before such a general formulation was considered, the original set of optimization problems as in \citet{optnet} were restricted to convex quadratic programs (QPs) of the form
 
 \begin{equation}
 \begin{aligned}
@@ -105,7 +108,7 @@ where \(x \in \mathbb{R}^n\) is the optimization variable, \(P \in \mathbb{S}_+^
 
 \subsection{Argmin Differentiation}
 
-The method of implicit differentiation used in \citep{optnet} builds of a technique called \textbf{argmin differentiation} that has been previously applied to differentiate through particular optimization problems. The first major treatment of argmin differentiation in a general setting is found in \citep{gould2016differentiating}. While this approach provides theoretical groundwork for differentiating through optimization layers, it treats equality and inequality constraints separately, rather than handling them simultaneously. We briefly review their key results for three cases: unconstrained optimization problems, optimization problems with only equality constraints, and optimization problems with only inequality constraints. The proofs use results from calculus and are omitted here. 
+The method of implicit differentiation used in \citet{optnet} builds of a technique called \textbf{argmin differentiation} that has been previously applied to differentiate through particular optimization problems. The first major treatment of argmin differentiation in a general setting is found in \citet{gould2016differentiating}. While this approach provides theoretical groundwork for differentiating through optimization layers, it treats equality and inequality constraints separately, rather than handling them simultaneously. We briefly review their key results for three cases: unconstrained optimization problems, optimization problems with only equality constraints, and optimization problems with only inequality constraints. The proofs use results from calculus and are omitted here. 
 
 Consider the following general optimization problem: 
 
@@ -113,7 +116,7 @@ Consider the following general optimization problem:
 g(x) = \argmin_{y} f(x,y)
 \end{equation}
 
-where $f: \mathbb{R} \times \mathbb{R}^n \rightarrow \mathbb{R}$ is continuous and twice-differentiable. The general results found in \citep{gould2016differentiating} are provided below:
+where $f: \mathbb{R} \times \mathbb{R}^n \rightarrow \mathbb{R}$ is continuous and twice-differentiable. The general results found in \citet{gould2016differentiating} are provided below:
 
 \textbf{Unconstrained} 
 
@@ -141,7 +144,7 @@ where $H = f_{YY}(x,g(x))$.
 
 \textbf{Inequality-Constrained}
 
-Suppose we have inequality constraints $f_i(x,y) \leq 0$, $i=1,\ldots,m$. Using the barrier method (see \citep{boyd2004convex} for a more comprehensive discussion), the constrained problem can be approximated as:
+Suppose we have inequality constraints $f_i(x,y) \leq 0$, $i=1,\ldots,m$. Using the barrier method (see \citet{boyd2004convex} for a more comprehensive discussion), the constrained problem can be approximated as:
 
 \begin{equation}
 \text{minimize}_y \quad tf_0(x,y) - \sum_{i=1}^m \log(-f_i(x,y))
@@ -155,11 +158,14 @@ g'(x) \approx -(tf_{YY}(x,g(x)) + \phi_{YY}(x,g(x)))^{-1}(tf_{XY}(x,g(x)) + \phi
 
 where $\phi(x,y) = \sum_{i=1}^m \log(-f_i(x,y))$ is the barrier function.
 
-While providing a mathematical foundation for optimization layers, this approach lacks a unified treatment of mixed constraints. There are also other inefficiencies, such as the use of the barrier method as an approximation to the inequality-constrained case, which can be numerically unstable and computationally expensive. The inversion of the Hessian matrices in the equality-constrained case can furthermore be unsuited for large-scale problems. The more efficient technique of cone differentiation is discussed below. This new approach is shown to be general in \citep{differentiableconvexoptimizationlayers}, as a large subclass of convex optimization problems known as disciplined convex programming (DCP) problems admit reformulations as a cone problems. 
+While providing a mathematical foundation for optimization layers, this approach lacks a unified treatment of mixed constraints. There are also other inefficiencies, such as the use of the barrier method as an approximation to the inequality-constrained case, which can be numerically unstable and computationally expensive. The inversion of the Hessian matrices in the equality-constrained case can furthermore be unsuited for large-scale problems. 
+
+
+Thus, \citet{optnet} uses an adapated, more general version of the technique and \citet{differentiableconvexoptimizationlayers} uses the even more efficient technique of cone differentiation, which is discussed below. This new approach is shown to be general in \citet{differentiableconvexoptimizationlayers}, as a large subclass of convex optimization problems known as disciplined convex programming (DCP) problems admit reformulations as a cone problems. 
 
 \subsection{Differentiation Through Cone Programs}
 
-While argmin differentiation provides a theoretical foundation for differentiating through optimization problems, a more computationally efficient approach leverages the structure of cone programs. This procedure was developed in \citep{conedifferentiation} and is summarized here. The primal form of a cone program takes the form:
+While argmin differentiation provides a theoretical foundation for differentiating through optimization problems, a more computationally efficient approach leverages the structure of cone programs. This procedure was developed in \citet{conedifferentiation} and is summarized here. The primal form of a cone program takes the form:
 \begin{equation}
 \begin{aligned}
 \text{minimize} \quad & c^T x \\
@@ -187,7 +193,7 @@ The next step is to understand how optimal solutions depend on and change with p
 
 \subsubsection{KKT Conditions for Convex Optimization Problems}
 
-The Karush-Kuhn-Tucker (KKT) conditions form a cornerstone of optimization theory, defining optimality criteria for constrained optimization problems. The full treatment can be found in \citep{boyd2004convex}; the main results are summarized below. In the context of convex optimization, these conditions are both necessary and sufficient for optimality. Consider a convex optimization problem where we aim to minimize a convex objective function $f_0(\mathbf{x})$ subject to inequality constraints $f_i(\mathbf{x}) \leq 0$ and equality constraints $h_i(\mathbf{x}) = 0$. The problem can be expressed as:
+The Karush-Kuhn-Tucker (KKT) conditions form a cornerstone of optimization theory, defining optimality criteria for constrained optimization problems. The full treatment can be found in \citet{boyd2004convex}; the main results are summarized below. In the context of convex optimization, these conditions are both necessary and sufficient for optimality. Consider a convex optimization problem where we aim to minimize a convex objective function $f_0(\mathbf{x})$ subject to inequality constraints $f_i(\mathbf{x}) \leq 0$ and equality constraints $h_i(\mathbf{x}) = 0$. The problem can be expressed as:
 
 \begin{align*}
     \text{Minimize } & \quad f_0(\mathbf{x}) \\
@@ -273,7 +279,7 @@ Q(A,b,c) = \begin{pmatrix}
 \end{pmatrix}.
 \end{equation}
 
-Furthermore, $s$ yields a solution to the so-called homogeneous self-dual embedding introduced in \citep{Yeselfdualemb} and \citep{Xuselfdualemb}, which a mathematical formulation  that transforms a primal-dual optimization problem into a single system of equations. In particular, solving this system ensures that the resulting solution satisfies all the primal-dual KKT conditions. Finally, $\phi$ maps a solution of the homogeneous self-dual embedding to the solution of the primal-dual pair. 
+Furthermore, $s$ yields a solution to the so-called homogeneous self-dual embedding introduced in \citet{Yeselfdualemb} and \citet{Xuselfdualemb}, which a mathematical formulation  that transforms a primal-dual optimization problem into a single system of equations. In particular, solving this system ensures that the resulting solution satisfies all the primal-dual KKT conditions. Finally, $\phi$ maps a solution of the homogeneous self-dual embedding to the solution of the primal-dual pair. 
 
 By the chain rule, we have 
 
@@ -281,14 +287,14 @@ By the chain rule, we have
 DS(A, b, c) = D\phi(z) \, Ds(Q) \, DQ(A, b, c).
 \]
 
-To compute the derivative of the solution map $DS(A,b,c)$, the authors utilize three key transformations ensure mathematical tractability. The first step maps the problem data perturbations $(dA,db,dc)$ into a skew-symmetric matrix $dQ$ by directly arranging them into the corresponding block structure, preserving the critical skew-symmetric property required for feasibility. The most challenging component is computing $Ds$ - this requires solving a large linear system $Mdz = -g$ that encodes how these perturbations affect the solution. Here $M = ((Q-I)D\Pi(z)+I)/w$ combines the problem matrices with projection derivatives, scaled by the solution parameter $w$. The vector $g = dQ\Pi(z/|w|)$ represents how perturbations affect the normalized residual map that measures optimality. Since directly forming and inverting $M$ would be computationally infeasible for large problems, the authors employ LSQR (Least Squares QR) - an iterative method introduced in \citep{lsqr}. LSQR gradually builds up the solution by combining QR matrix factorization with a technique called bidiagonalization, requiring only matrix-vector products rather than storing or inverting the full matrix $M$. The final transformation $D\phi$ converts the computed changes $dz$ into perturbations in the optimization variables $(dx,dy,ds)$ through carefully constructed projections onto the dual cone. For computing derivatives in the backward pass needed for deep learning, this process is reversed using the same efficient numerical techniques. The authors demonstrate this approach scales to problems with millions of variables through an efficient implementation avoiding any explicit matrix operations.
+To compute the derivative of the solution map $DS(A,b,c)$, the authors utilize three key transformations ensure mathematical tractability. The first step maps the problem data perturbations $(dA,db,dc)$ into a skew-symmetric matrix $dQ$ by directly arranging them into the corresponding block structure, preserving the critical skew-symmetric property required for feasibility. The most challenging component is computing $Ds$ - this requires solving a large linear system $Mdz = -g$ that encodes how these perturbations affect the solution. Here $M = ((Q-I)D\Pi(z)+I)/w$ combines the problem matrices with projection derivatives, scaled by the solution parameter $w$. The vector $g = dQ\Pi(z/|w|)$ represents how perturbations affect the normalized residual map that measures optimality. Since directly forming and inverting $M$ would be computationally infeasible for large problems, the authors employ LSQR (Least Squares QR) - an iterative method introduced in \citet{lsqr}. LSQR gradually builds up the solution by combining QR matrix factorization with a technique called bidiagonalization, requiring only matrix-vector products rather than storing or inverting the full matrix $M$. The final transformation $D\phi$ converts the computed changes $dz$ into perturbations in the optimization variables $(dx,dy,ds)$ through carefully constructed projections onto the dual cone. For computing derivatives in the backward pass needed for deep learning, this process is reversed using the same efficient numerical techniques. The authors demonstrate this approach scales to problems with millions of variables through an efficient implementation avoiding any explicit matrix operations.
 
 \section{OptNet: Integrating QP Layers Into Neural Architecture}
-We begin our discussion of convex optimization layers by deriving the key results in \citep{optnet}, the first major attempt to integrate such layers into neural networks in an end-to-end fashion. The goal is to make the mathematical theory underpinning them rigorous and explore the intuition behind the various components. We will then discuss the expressive power of these layers, and conclude with a discussion of their limitations. 
+We begin our discussion of convex optimization layers by deriving the key results in \citet{optnet}, the first major attempt to integrate such layers into neural networks in an end-to-end fashion. The goal is to make the mathematical theory underpinning them rigorous and explore the intuition behind the various components. We will then discuss the expressive power of these layers, and conclude with a discussion of their limitations. 
 
-\subsection{OptNet: Method}
+\subsection{Method}
 
-The general idea in \citep{optnet} cast a convex QP as an optimization layer, where the output of the layer $z_{i+1}$ is the solution of the problem and the constraints are parametrized by the output of the previous layer $z_i$. In particular, for optimization variable $z \in \mathbb{R}^n$, we have: 
+The general idea in \citet{optnet} cast a convex QP as an optimization layer, where the output of the layer $z_{i+1}$ is the solution of the problem and the constraints are parametrized by the output of the previous layer $z_i$. In particular, for optimization variable $z \in \mathbb{R}^n$, we have: 
 
 \[
 z_{i+1} = \argmin_{z} \frac{1}{2} z^T Q(z_i) z + q(z_i)^T z
@@ -420,38 +426,170 @@ The computational bottleneck lies in factorizing the KKT matrix, which encodes t
 
 The GPU-based solver exploits parallelism by solving all QPs in the mini-batch simultaneously. For a batch size of \( N \), the parallel implementation reduces the overall complexity to \( \mathcal{O}(n^3 + N n^2) \), compared to the sequential cost of \( \mathcal{O}(N n^3) \) with CPU-based solvers. By sharing the expensive KKT factorization across the batch, the approach ensures both forward and backward passes are computationally efficient and scalable to large mini-batches, making it feasible for end-to-end training in deep learning systems.
 
- The full details are found in \citep{optnet}, and the solver is based on a primal-dual interior point method developed in \citep{mattingley2012cvxgen}.
+ The full details are found in \citet{optnet}, and the solver is based on a primal-dual interior point method developed in \citet{mattingley2012cvxgen}.
 
-\subsection{OptNet: Expressivity}
+\subsection{Expressivity}
 
-A key benefit of these layers is their expressive power. The key results obtained in the paper are summarized and proved here:
+A key benefit of these layers is their expressive power. The key results obtained in the paper are summarized and proved here with greater rigor:
+
+The first result is that an OptNet layer can represent any  elementwise piecewise linear function, in particular $\text{ReLU}(\cdot)$.
 
 \begin{theorem}
-    
+    An elementwise piecewise linear function $f: \mathbb{R}^n \to \mathbb{R}^{n}$ with $k$ linear regions can be represented by OptNet layer using $\mathcal{O}(nk)$ parameters. In particular, we can represent the ReLU layer $z_{i+1} = \max\{Wz_i + b, 0\}$ (where $W \in \mathbb{R}^{n \times m}, b \in \mathbb{R}^n$) by an OptNet layer with $\mathcal{O}(mn)$ parameters. 
 \end{theorem}
 
-\section{Generalization to Convex Programming Layers and Key Adaptations}
+\begin{proof}
+    A piecewise linear function can be expressed in terms of maximum operators. For instance, the univariate piecewise linear function $f(x)$ with $k$ linear regions can be written as:
+    \[
+    f(x) = \sum_{i=1}^k w_i \max\{a_i x + b_i, 0\},
+    \]
+    where $w_i \in \{-1, 1\}$ and $a_i, b_i \in \mathbb{R}$. This representation is derived by iteratively constructing linear segments based on breakpoints.
 
-We will consider the limitations of the model and how they were addressed in the subsequent major work on the topic \citep{differentiableconvexoptimizationlayers}.
-    \subsection{Disciplined Parametrized Programming}
-    slka
-    \subsection{Affine-Solver-Affine Form}
-\subsection{Representational Power}
+    To encode this function in an OptNet layer, we define the following quadratic program:
+    \[
+    \min_{z, t \in \mathbb{R}^k} \|t\|_2^2 + \|z - w^T t\|_2^2 \quad \text{subject to } a_i x + b_i \leq t_i, \, \forall i \in \{1, \ldots, k\}.
+    \]
+    The optimization ensures that each $t_i$ takes the value $\max\{a_i x + b_i, 0\}$ due to the constraint structure and objective minimization, while $z = w^T t$ reproduces the output $f(x)$. By applying this elementwise, we can extend the formulation to $n$ dimensions, maintaining a parameter complexity of $\mathcal{O}(nk)$.
 
-\section{Implementation}
+    For the specific case of ReLU, where $z = \max\{Wx + b, 0\}$, we observe that this is equivalent to the optimization:
+    \[
+    \min_{z} \|z - (Wx + b)\|_2^2 \quad \text{subject to } z \geq 0.
+    \]
+    Here, the parameter complexity is dominated by $W \in \mathbb{R}^{n \times m}$, resulting in $\mathcal{O}(mn)$ parameters.
+\end{proof}
 
-alsjdlskajd
-\subsection{Computational Methods}
-    \subsubsection{Interior Point Methods}
-    \subsubsection{GPU-Based Solvers}
-\subsection{Software Integration}
-    \subsubsection{Deep Learning Frameworks}
-    \subsubsection{Performance Optimization}
-\subsection{Practical Considerations}
+The second result suggests that an OptNet layer is actually more expressive than a two-layer $ReLU$ network: 
+
+\begin{theorem}
+    There exists a function $f(z): \mathbb{R}^n \to \mathbb{R}$, represented by an OptNet layer with $p$ parameters, that the two-layer ReLU network $g(x) = \sum_{i=1}^k w_i \max\{a_i^{\top} z + b_i, 0\}$ cannot globally represent over $\mathbb{R}$ and which require $\mathcal{O}(c^p)$ parameters to approximate over any finite region.
+\end{theorem}
+
+\section{Differentiable Convex Optimization Layers}
+
+The next major advancement in the field was the extension to a more general class of convex optimization layers in \citet{differentiableconvexoptimizationlayers}. The method furthermore automates the conversion of the optimization problem to canonical form and uses the efficient method of differentiating cone problems found in \citet{conedifferentiation}. We will discuss the methods used in \citet{differentiableconvexoptimizationlayers} which make this possible, which include the invention of a new grammar for convex problems and way of canonicalizing the problem to the corresponding (differentiable) cone problem. 
+
+\subsection{Formal Grammar}
+To ensure the method is easily generalizable to a wide class of convex optimization problem, it is necessary to define a rigorous grammar for constructing convex optimization problems. 
+
+\subsubsection{Disciplined Convex Programming}
+The grammar developed in \citet{differentiabilitysolutionconvexoptimization} is an extension of a well-known grammar, \textbf{disciplined convex programming (DCP)} \citet{dcp}, which encompasses a large class of convex opimization problems. DCP relies on atomic functions - basic components with explicitly defined mathematical properties - and a composition framework that preserves convexity through principled combination of these atoms.
+
+Each atomic function must specify three key attributes: its curvature classification (whether it behaves as an affine, convex, or concave function), its monotonicity characteristics per input argument, and its valid domain of operation. These properties enable systematic verification of convexity when atoms are combined.
+
+The theoretical foundation lies in a composition principle: Let $h$ represent a convex function mapping from $\mathbb{R}^k$ to $\mathbb{R}$, with monotonicity properties defined by two key index sets - $I_1$ for arguments where $h$ is nondecreasing, and $I_2$ for those where it is nonincreasing. When composed with functions $g_i$ mapping from $\mathbb{R}^n$ to $\mathbb{R}$ that satisfy specific curvature conditions (convex for indices in $I_1$, concave for $I_2$, and affine elsewhere), the resulting function $f(x) = h(g_1(x),...,g_k(x))$ maintains convexity.
+
+This composition theorem enables verification through rule-checking rather than complex mathematical analysis. While this means some valid convex problems cannot be expressed directly in the framework, the atom library concept provides extensibility - new functions can be added with verified properties, expanding the scope of expressible problems while maintaining the verification guarantees. In particular, DCP is the grammar behind many popular libraries such as Python's \texttt{cvxpy}.
+
+\subsubsection{Disciplined Parametrized Programming}
+
+A key observation in \citet{differentiableconvexoptimizationlayers} is that DCP does not ensure that the mapping from problem parameters to solutions is structured in a way that enables efficient analytical differentiation through the optimization process. Thus, it is necessary to modify DCP slightly to create a new grammar which they call disciplined paramatrized programming (DPP). The main feature of this grammar is that the produced program can be reduced (canonicalized) to a special form called \textbf{affine-solver-affine} (ASA) form. Backpropogation through the optimization layer is agnostic to the operations in the canonicalization of a DPP to ASA form and thus allows automatic differentiation throughout the network. 
+
+simplifying differentiation by enabling efficient computation of gradients without directly backpropagating through the complex steps of problem transformation,
+
+DPP, like DCP, relies on a set of atomic functions with explicitly defined curvature (constant, affine, convex, or concave) and per-argument monotonicities. These atoms are combined according to composition rules derived from the composition theorem for convex functions, ensuring that the resulting expressions preserve convexity. Problems in both DCP and DPP can be represented as computational trees, where the nodes represent atomic functions and the leaves correspond to variables, constants, or parameters. This compositional structure enables systematic verification of convexity by analyzing the curvature of individual components and the rules governing their combination.
+
+DPP differs from DCP in how it treats parameters and imposes additional restrictions on their usage to enable more expressive parameterized problems while maintaining convexity guarantees. 
+
+A disciplined parametrized program is an optimization problem of the form:
+\[
+\begin{aligned}
+\text{minimize} \quad & f_0(x, \theta) \\
+\text{subject to} \quad & f_i(x, \theta) \leq \tilde{f}_i(x, \theta), \quad i = 1, \ldots, m_1, \\
+& g_i(x, \theta) = \tilde{g}_i(x, \theta), \quad i = 1, \ldots, m_2,
+\end{aligned}
+\]
+where \( x \in \mathbb{R}^n \) represents the optimization variables, \( \theta \in \mathbb{R}^p \) are parameters, \( f_i \) are convex functions, \( \tilde{f}_i \) are concave functions, and \( g_i, \tilde{g}_i \) are affine functions. Parameters are symbolic constants with known properties, such as sign or monotonicity, but without fixed numerical values. An expression is said to be \textit{parameter-affine} if its leaves do not include variables and is affine in its parameters; an expression is said to be \textit{parameter-free} or \textit{variable-free} if it does not have parameters or variables respectively.
+
+Namely, DPP differs from DCP in two ways:
+
+\begin{enumerate}
+    \item \textbf{Treatment of Parameters}.** In DCP, parameters are treated as constants with fixed curvature and monotonicity properties. This restricts their use in constructing optimization problems. DPP, on the other hand, treats parameters as affine objects, similar to variables, allowing them to participate more flexibly in parameterized expressions. This change enables DPP to express problems involving linear relationships between parameters and variables while preserving the convexity guarantees.
+    \item  \textbf{Generalized Composition Rules} DPP relaxes some restrictions on atomic operations involving parameters. For example, in DCP, the product atom \(\phi_{\text{prod}}(x, y) = xy\) is classified as affine only if one of its arguments is a constant (i.e., variable-free). Under DPP, this rule is expanded, also allowing the product to be classified as affine if one argument is parameter-affine and the other is parameter-free. This expansion enables the representation of a wider range of parameterized optimization problems.
+\end{enumerate}
+
+Every DPP program satisfies the rules of DCP, but the converse is not true. DPP extends the expressive power of DCP by introducing additional flexibility in the treatment of parameters and broadening the conditions under which operations are considered convex, concave, or affine. Despite these differences, both frameworks rely on the same composition-based approach to systematically verify the structure of optimization problems.
+
+\subsection{Canonicalization to Affine-Solver-Affine Form}
+
+Consider a disciplined convex program with variable $x \in \mathbb{R}^n$ parametrized by $\theta \in \mathbb{R}^p$. The solution map $S: \mathbb{R}^p \to \mathbb{R}^n$ maps parameters to solutions. To enable backpropagation through this layer in a neural network, we must determine how to compute the adjoint of the derivative $D^T S(\theta)$. Here $Df(x)$ denotes the derivative (Jacobian) of a function $f$ evaluated at point $x$, while $D^T f(x)$ denotes its adjoint - the transpose of the Jacobian matrix. The adjoint is critical as it enables efficient computation of gradients during backpropagation.
+
+The solution map $S$ can be expressed as a composition of three maps: $S = R \circ s \circ C$, where canonicalizer $C$ maps parameters to cone program data $(A, b, c)$, cone solver $s$ produces solution $\tilde{x}^\star$, and retriever $R$ maps $\tilde{x}^\star$ to original solution $x^\star$. When both $C$ and $R$ are affine maps, we say the problem is in \textbf{affine-solver-affine (ASA) form}. For this composition, we can apply the chain rule to derivatives. For functions $f$ and $g$, recall that $D(g \circ f)(x) = Dg(f(x))Df(x)$. Taking the adjoint of both sides gives $(D(g \circ f)(x))^T = (Df(x))^T(Dg(f(x)))^T$. Applying this twice to our three-function composition yields:
+
+\[
+D^T S(\theta) = D^T C(\theta)D^T s(A, b, c)D^T R(\tilde{x}^\star)
+\]
+
+In standard DCP canonicalization, computing these derivatives requires tracking dependencies through a complex tree of transformations. DCP recursively expands each nonlinear atom into its graph implementation. For instance, $\|x\|_2$ becomes a new variable $t$ with constraint $(t,x) \in \mathcal{Q}^{n+1}$ where $\mathcal{Q}^{n+1}$ is the second-order cone. While this preserves convexity, it creates intricate dependencies between parameters and problem data. Even a simple term like $\theta x$ becomes problematic - DCP treats $\theta$ as a constant, obscuring how the solution changes with $\theta$ and requiring backpropagation through the full canonicalization procedure.
+
+
+The grammar of DPP introduced in \citet{differentiableconvexoptimizationlayers} is a subset of DCP that ensures the canonicalization map $C$ and retriever $R$ are affine. This enables representing these maps as sparse matrices that only need to be computed once. DPP achieves this by treating parameters as affine objects rather than constants and restricting parameter operations to preserve affine structure. Under DPP, products require one term to be parameter-free, ensuring problem data depends affinely on parameters.
+
+The following theorem formalizes this sparse matrix representation:
+
+\begin{theorem}[Canonicalizer Representation]
+The canonicalizer map $C$ for a disciplined parametrized program can be represented by a sparse matrix $Q \in \mathbb{R}^{n \times p+1}$ and sparse tensor $R \in \mathbb{R}^{m \times n+1 \times p+1}$, where $m$ is the constraint dimension. Let $\tilde{\theta} \in \mathbb{R}^{p+1}$ denote the concatenation of $\theta$ and 1. Then the cone program data is given by:
+\[
+c = Q\tilde{\theta}, \quad [A \quad b] = \sum_{i=1}^{p+1} R_{[:,:,i]}\tilde{\theta}_i
+\]
+\end{theorem}
+
+\begin{proof}
+We construct $Q$ and $R$ via reduction on the affine expression trees representing the canonicalized problem. Consider a root node $f$ with arguments $g_1,\ldots,g_n$. We obtain tensors $T_1,\ldots,T_n$ representing $f$'s linear action on each argument, then recursively process each subtree $g_i$ to obtain tensors $S_1,\ldots,S_n$. The DPP rules ensure that for each $i$, either $(T_i)_{j,k,l}=0$ for $l\neq p+1$ or $(S_i)_{j,k,l}=0$ for $l\neq p+1$.
+
+Define operation $\psi(T_i,S_i)$ as:
+\[
+\psi(T_i,S_i) = \begin{cases}
+   \sum_{l=1}^{p+1} (T_i)_{[:,:,p+1]}(S_i)_{[:,:,l]} & \text{ if } (T_i)_{j,k,l}=0 \text{ for } l\neq p+1 \\
+   \sum_{l=1}^{p+1} (T_i)_{[:,:,l]}(S_i)_{[:,:,p+1]} & \text{ otherwise}
+\end{cases}
+\]
+
+The tree rooted at $f$ evaluates to $S_0 = \sum_{i=1}^n \psi(T_i,S_i)$. The recursion bottoms out at leaf nodes:
+\begin{itemize}
+    \item Variable leaf $x \in \mathbb{R}^d$ yields $T \in \mathbb{R}^{d\times n+1 \times 1}$ with $T_{i,j,1} = 1$ if $i$ maps to $j$ in the variable vector
+    \item Parameter leaf $p \in \mathbb{R}^d$ yields $T \in \mathbb{R}^{d\times 1 \times p+1}$ with $T_{i,1,j} = 1$ if $i$ maps to $j$ in the parameter vector  
+    \item Constant leaf $c \in \mathbb{R}^d$ yields $T \in \mathbb{R}^{d\times 1 \times 1}$ with $T_{i,1,1} = c_i$
+\end{itemize}
+This construction yields the desired sparse representations $Q$ and $R$.
+\end{proof}
+
+This representation fundamentally changes how we handle derivatives. Rather than backpropagating through graph implementations and constraint reformulations, we compute derivatives using sparse matrix operations. Given parameters $\theta$, we obtain cone program data via $c = Q\tilde{\theta}$ and $[A \quad b] = \sum_{i=1}^{p+1} R_{[:,:,i]}\tilde{\theta}_i$, apply the cone solver for $\tilde{x}^\star$, and recover $x^\star$ through the affine retriever. For backpropagation, $D^T C(\theta)$ and $D^T R(\tilde{x}^\star)$ are simply transposes of our sparse matrices. The only substantial computation is differentiating through the cone solver $s$, which is accomplished using the method in \citet{conedifferentiation} (namely, by implicitly differentiating the KKT optimality conditions). This approach provides analytical derivatives while avoiding repeated canonicalization.
+
+Note that the QP layer given in \citet{optnet} is a specific case of the convex optimization layers in \citet{differentiableconvexoptimizationlayers} and can be represented in DPP.
+
+
+\section{Limitations and Future Work}
+
+We discuss the limitations of each framework and suggest possibilities for future work. 
+
+\subsection{Limitations of OptNet}
+
+While the OptNet framework exhibits several strengths, its practicality is limited by several factors. The first limitation is the cubic computational complexity associated with solving optimization problems exactly. This arises from the need to factorize the Karush-Kuhn-Tucker (KKT) system, which dominates the cost of solving the QPs. In practice, this makes the OptNet layer unsuitable for problems with high-dimensional decision variables or constraints. Specifically, the authors of \citet{optnet} note that the framework is generally practical for problems with fewer than 1000 hidden variables in the optimization layer, with substantially smaller limits required for applications demanding real-time computation. This stands in contrast to the quadratic complexity of standard feedforward neural network layers, such as fully connected or convolutional layers, highlighting a key bottleneck for scaling OptNet layers. Moreover, the original framework did not invoke structuress in the data matrices such as sparsity, which could possibly increase efficiency. 
+
+Another key problem is that tuning the parameters in an OptNet layer is highly nontrivial, primarily due to the invariances embedded in the parameter space. As an example, consider the equality constraint \(A x = b\), where \(A \in \mathbb{R}^{m \times n}\) and \(b \in \mathbb{R}^m\). If one row of \(A\), say the \(i\)-th row \(a_i^\top\), is scaled by a constant \(c > 0\), and simultaneously, the corresponding \(i\)-th entry in \(b\), \(b_i\), is scaled by the same constant \(c\), the constraint remains unchanged. Mathematically, the constraint 
+\[
+a_i^\top x = b_i
+\]
+transforms to 
+\[
+(c a_i^\top) x = (c b_i),
+\]
+which is equivalent because the scaling cancels out when checking feasibility. While this invariance does not affect the feasible set or optimal solution, it introduces challenges during training. Gradient-based optimization may attempt to update \(A\) and \(b\) along such invariant directions, leading to flat regions in the loss landscape where changes to \(A\) and \(b\) do not result in any change to the optimization layer’s output. This creates difficulty for gradient descent, as it struggles to identify informative updates, slowing convergence or requiring more aggressive tuning of hyperparameters such as learning rates. These challenges are compounded when multiple invariances interact, which can produce a degenerate parameter space that complicates training and necessitates careful initialization and optimization strategies to ensure stable learning. 
+
+The final limitation is that OptNet is geared towards a particular class of optimization problems (QPs), and moreover requires users to explicitly transform their problems into the appropriate canonical form. This is addressed in $\citet{differentiableconvexoptimizationlayers}$
+
+\subsection{Limitations of Differentiable Convex Optimization Layers (Agrawal et al.)}
+
+A fundamental limitation is that the approach hinges on solving a conic problem in each forward pass, and then differentiating through its solution map, incurring a computational cost that often scales at least cubicly in the problem dimension (e.g., factorizing KKT systems is typically $\mathcal{O}(n^3)$). This complexity can become impractical for large-scale instances, limiting the layer’s utility in real-time or high-throughput settings. Moreover, the method only applies to disciplined parametrized programs, which excludes a range of nonconvex or even certain convex formulations not easily expressed within their grammar. This modeling restriction may force significant and sometimes unnatural problem reformulations. Another issue arises at points of non-uniqueness or degeneracy in the solution: the solution map is not guaranteed to be differentiable, so the backward pass may produce heuristics rather than exact gradients. Finally, while the authors’ abstraction streamlines integration into standard deep learning frameworks, it still depends on robust conic solvers, which can fail, struggle with numerical ill-conditioning, or return only approximate solutions
+
+\subsection{Future Directions}
+
+A key direction is to develop solver routines that exploit problem structure—such as sparsity patterns, chordal decompositions, or block-diagonal forms—to drive down the cubic complexity currently incurred when factorizing KKT systems. Such improvements would directly benefit both general ASA-form layers and specialized frameworks like OptNet’s QP layers. Another immediate need is to extend the DPP grammar to handle a richer class of convex problems and certain structured nonconvex ones, reducing the overhead of manual, fragile re-formulations. On the theoretical side, ensuring stable and unique solutions—via mild regularization or strategic perturbations—would guarantee that gradients are well-defined and numerically stable, even at degenerate points. Finally, tighter coupling with advanced conic and QP solvers, including better warm-starting strategies, could improve solver reliability and runtime performance, making these approaches scalable to larger, more complex tasks.
 
 \section{Applications}
 
-alkdjlajsd
+
+
 \subsection{Structured Prediction}
 \subsection{Control Systems}
 \subsection{Financial Optimization}
