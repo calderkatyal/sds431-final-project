@@ -23,6 +23,9 @@
 %    \usepackage[nonatbib]{neurips_2024}
 
 
+
+
+
 \usepackage[utf8]{inputenc} % allow utf-8 input
 \usepackage[T1]{fontenc}    % use 8-bit T1 fonts
 \usepackage{hyperref}       % hyperlinks
@@ -37,6 +40,7 @@
 %%%%%%%%%%%%%%%%%
 % manually added packages
 %%%%%%%%%%%%%%%%%
+
 \usepackage{graphicx}
 \usepackage{amsmath}
 \usepackage{mathtools}
@@ -49,7 +53,33 @@
 \DeclareUnicodeCharacter{221A}{\ensuremath{\sqrt{}}}
 \DeclareMathOperator{\diag}{diag}
 
-\title{Convex Optimization Layers in Neural Architectures: Foundations and Perspectives}
+\usepackage{listings}
+\usepackage{xcolor}
+
+% Define some colors for Python code
+\definecolor{codegray}{gray}{0.95}
+\definecolor{pykeyword}{rgb}{0.0,0.0,0.6}   % darker blue for Python keywords
+\definecolor{pystring}{rgb}{0.2,0.5,0.2}    % green strings
+\definecolor{pycomment}{rgb}{0.5,0.5,0.5}   % gray comments
+\definecolor{pyfunc}{rgb}{0.55,0.0,0.55}    % purple for special functions
+
+% To highlight specific non-Python default keywords (like cp, sum_squares, etc.)
+% we use 'emph' and 'emphstyle' below.
+\lstset{
+    language=Python,
+    backgroundcolor=\color{codegray},
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{pykeyword}\bfseries,
+    stringstyle=\color{pystring},
+    commentstyle=\color{pycomment}\itshape,
+    frame=single,
+    breaklines=true,
+    showstringspaces=false,
+    emph={cp,sum_squares,CvxpyLayer,Minimize,Problem},     % additional keywords
+    emphstyle=\color{pyfunc}\bfseries
+}
+
+\title{Differentiable Convex Optimization Layers in Neural Architectures: Foundations and Perspectives}
 \raggedbottom
 
 
@@ -66,16 +96,14 @@
 \maketitle
 
 \begin{abstract}
-    The integration of optimization problems within neural network architectures represents a fundamental shift from traditional approaches to handling constraints in deep learning. While it is long known that neural networks can incorporate soft constraints with techniques such regularization, strict adherence to hard constraints is generally more difficult. A recent advance in this field, however, has addressed this problem by enabling the direct embedding of optimization layers as differentiable components within deep networks. This paper surveys the evolution and current state of this approach, from early implementations limited to quadratic programming to more recent frameworks supporting general convex optimization problems. We provide a comprehensive review of the theoretical foundations, practical implementations, and emerging applications of this technology. Our analysis includes detailed mathematical proofs, implementation guidelines, and an examination of various use cases that demonstrate the potential of this hybrid approach. This work synthesizes developments at the intersection of optimization theory and deep learning, offering insights into both current capabilities and future research directions in this rapidly evolving field. 
+    The integration of optimization problems within neural network architectures represents a fundamental shift from traditional approaches to handling constraints in deep learning. While it is long known that neural networks can incorporate soft constraints with techniques such as regularization, strict adherence to hard constraints is generally more difficult. A recent advance in this field, however, has addressed this problem by enabling the direct embedding of optimization layers as differentiable components within deep networks. This paper surveys the evolution and current state of this approach, from early implementations limited to quadratic programming, to more recent frameworks supporting general convex optimization problems. We provide a comprehensive review of the background, theoretical foundations, and emerging applications of this technology. Our analysis includes detailed mathematical proofs and an examination of various use cases that demonstrate the potential of this hybrid approach. This work synthesizes developments at the intersection of optimization theory and deep learning, offering insights into both current capabilities and future research directions in this rapidly evolving field. 
 \end{abstract}
 \section{Introduction}
 \label{sec:intro}
-Imagine we want to train a model to solve a structured task given a set of input and output sequences, without explicit knowledge of the constraints or rules involved. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To attempt to learn and conform with the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, without a perfectly tuned reward signal from the loss function, the model will tolerate invalid solutions, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could incorporate a learnable component into the model that intuitively learns the rules of the task and imposes the output to conform with them, we would expect improved generalization, as the constraints would be independent of specific input distributions and become globally optimized over the training process. However, there is no general mechanism for incorporating complex, learnable hard constraints in a vanilla feedforward network. Only simple constraints—such the simplex constraint in the Softmax layer—are easily enforced. To address this limitation, \citet{optnet} proposes a foundational method of embedding these constrainted optimization problems into the neural architecture as distinct layers. In this layer, the network can output the solution to the constrained optimization problems as part of its forward pass, where the constraints are parametrized by the previous layers; furthermore, it can propagate gradient information through these constraints in the backward pass to better understand the nature of the task. This allows the architecture to enforce either explicitly defined or implicitly learned hard constraints within an end-to-end differentiable framework. 
+Imagine we want to train a model to solve a structured task given a set of input and output sequences, without explicit knowledge of the constraints or rules involved. A typical approach might be to use a feedforward network, such as a Convolutional Neural Network (CNN), to learn patterns from the data. To attempt to learn and conform with the rules, we might try techniques such as regularization or a robust loss function that penalizes rulebreaking. Nevertheless, without a perfectly tuned reward signal from the loss function, the model will tolerate invalid solutions, leading to overfitting as the model may latch onto irrelevant patterns that don’t generalize. If we could incorporate a learnable component into the model that intuitively learns the rules of the task and ensures the output conforms with them, we would expect improved generalization, as the constraints would be independent of specific input distributions and become globally optimized over the training process. However, there is no general mechanism for incorporating complex, learnable hard constraints in a vanilla feedforward network. Only simple constraints—such as the simplex constraint in the softmax layer—are easily enforced. To address this limitation, \citet{optnet} proposes a foundational method of embedding these constrained optimization problems into the neural architecture as distinct layers. In this layer, the network can output the solution to the constrained optimization problems as part of its forward pass, where the constraints are parametrized by the previous layers; furthermore, it can propagate gradient information through these constraints in the backward pass to better understand the nature of the task. This allows the architecture to enforce either explicitly defined or implicitly learned hard constraints within an end-to-end differentiable framework. 
 
 In this survey, we focus on the development of convex optimization layers as a means to enforce hard constraints within neural network architectures, a capability that has traditionally been challenging to achieve. Starting with the pioneering work of \citet{optnet}, which introduced the embedding of quadratic programming layers, we trace the progression of this idea into more general convex optimization frameworks as in \citet{differentiableconvexoptimizationlayers}. We examine the mathematical principles that enable these layers to remain differentiable, the computational methods required for their efficient implementation, and the integration of these methods into existing neural network workflows. By exploring both theoretical advancements and practical applications, this survey aims to provide a deeper understanding of how convex optimization layers enhance the capacity of neural networks to solve structured problems while adhering to complex constraints. 
 
-
-\section{Background}
 
 The methods employed in these convex optimization layers are extensions of long-standing theory in the subject of convex optimization, the full treatment of which can be found in \citet{boyd2004convex}. The key to these models is to formulate a learnable optimization problem using the networks parameters and output a solution which can be fed into subsequent layers. The first technique developed for this was an adaptation of \textit{argmin differentiation} in which implicit differentiation is used to obtain the gradients from the Karush-Kuhn-Tucker (KKT) matrix associated with the problem. Subsequent works such as \citet{differentiableconvexoptimizationlayers} transform the problem into a cone problem and use the recently developed technique in \citet{conedifferentiation} to differentiate through the solution map of the cone program. Of course, as QPs are a subset of cone programs, this method is immediately transferable to the optimization layers in \citet{optnet}.
 
@@ -108,7 +136,7 @@ where \(x \in \mathbb{R}^n\) is the optimization variable, \(P \in \mathbb{S}_+^
 
 \subsection{Argmin Differentiation}
 
-The method of implicit differentiation used in \citet{optnet} builds of a technique called \textbf{argmin differentiation} that has been previously applied to differentiate through particular optimization problems. The first major treatment of argmin differentiation in a general setting is found in \citet{gould2016differentiating}. While this approach provides theoretical groundwork for differentiating through optimization layers, it treats equality and inequality constraints separately, rather than handling them simultaneously. We briefly review their key results for three cases: unconstrained optimization problems, optimization problems with only equality constraints, and optimization problems with only inequality constraints. The proofs use results from calculus and are omitted here. 
+The method of implicit differentiation used in \citet{optnet} builds off a technique called \textbf{argmin differentiation} that has been previously applied to differentiate through particular optimization problems. The first major treatment of argmin differentiation in a general setting is found in \citet{gould2016differentiating}. While this approach provides theoretical groundwork for differentiating through optimization layers, it treats equality and inequality constraints separately, rather than handling them simultaneously. We briefly review their key results for three cases: unconstrained optimization problems, optimization problems with only equality constraints, and optimization problems with only inequality constraints. The proofs use results from calculus and are omitted here. 
 
 Consider the following general optimization problem: 
 
@@ -189,7 +217,7 @@ Therefore, the dual optimization problem is of the form:
 
 where $y \in \mathbb{R}^m$ represents the dual variables and $K^* = {y \in \mathbb{R}^m : y^T x \geq 0 \text{ for all } x \in K}$ is the dual cone of $K$ (in particular, this is the set of all vectors \( y \) that form non-negative inner products with every vector \( x \) in the cone \( K \)). 
 
-The next step is to understand how optimal solutions depend on and change with problem parameters. To do this systematically, we need to derive the Karush-Kuhn-Tucker conditions for the system. 
+The next step is to understand how optimal solutions depend on and vary with problem parameters. To do this systematically, we need to derive the Karush-Kuhn-Tucker conditions for the system. 
 
 \subsubsection{KKT Conditions for Convex Optimization Problems}
 
@@ -294,10 +322,10 @@ We begin our discussion of convex optimization layers by deriving the key result
 
 \subsection{Method}
 
-The general idea in \citet{optnet} cast a convex QP as an optimization layer, where the output of the layer $z_{i+1}$ is the solution of the problem and the constraints are parametrized by the output of the previous layer $z_i$. In particular, for optimization variable $z \in \mathbb{R}^n$, we have: 
+The general idea in \citet{optnet} cast a convex QP as an optimization layer, where the output  $z_{i+1}$ of the layer is the solution of the problem and the constraints are parametrized by the output of the previous layer $z_i$. In particular, for optimization variable $z \in \mathbb{R}^n$, we have: 
 
 \[
-z_{i+1} = \argmin_{z} \frac{1}{2} z^T Q(z_i) z + q(z_i)^T z
+z_{i+1} = \text{argmin}_{z} \frac{1}{2} z^T Q(z_i) z + q(z_i)^T z
 \]
 \[
 \text{subject to} \quad A(z_i) z = b(z_i), \quad G(z_i) z \leq h(z_i).
@@ -306,7 +334,7 @@ z_{i+1} = \argmin_{z} \frac{1}{2} z^T Q(z_i) z + q(z_i)^T z
 where \( Q \in \mathbb{R}^{n \times n} \succeq 0 \) ensures convexity of the objective, and \( q \in \mathbb{R}^n \), 
 \( A(z_i) \in \mathbb{R}^{m \times n} \), \( b(z_i) \in \mathbb{R}^m \), \( G(z_i) \in \mathbb{R}^{p \times n} \), and \( h(z_i) \in \mathbb{R}^p \) are problem data. 
 
-The first step is constructing the Lagrangian. For notational clarity, we temporarily suppress the $z_i$ dependence for the rest of the analysis:
+The first step is to construct the Lagrangian. For notational clarity, we temporarily suppress the $z_i$ dependence for the rest of the analysis:
 
 \[
 L(z,\nu,\lambda) = \frac{1}{2}z^T Q z + q^T z + \nu^T(Az - b) + \lambda^T(Gz - h)
@@ -458,11 +486,25 @@ The first result is that an OptNet layer can represent any  elementwise piecewis
     Here, the parameter complexity is dominated by $W \in \mathbb{R}^{n \times m}$, resulting in $\mathcal{O}(mn)$ parameters.
 \end{proof}
 
-The second result suggests that an OptNet layer is actually more expressive than a two-layer $ReLU$ network: 
+The authors moreover suggests that an OptNet layer is actually more expressive than a two-layer $ReLU$ network
 
 \begin{theorem}
     There exists a function $f(z): \mathbb{R}^n \to \mathbb{R}$, represented by an OptNet layer with $p$ parameters, that the two-layer ReLU network $g(x) = \sum_{i=1}^k w_i \max\{a_i^{\top} z + b_i, 0\}$ cannot globally represent over $\mathbb{R}$ and which require $\mathcal{O}(c^p)$ parameters to approximate over any finite region.
 \end{theorem}
+
+\begin{proof}
+Consider $f(x) = \max\{a_1^\top x, a_2^\top x, a_3^\top x\}$ with linearly independent $a_1,a_2,a_3 \in \mathbb{R}^2$. This function admits an OptNet formulation:
+\begin{equation*}
+\begin{aligned}
+\min_{z} \quad & z^2 \\
+\text{subject to} \quad & a_i^\top x \leq z, \quad i = 1, 2, 3
+\end{aligned}
+\end{equation*}
+
+The non-differentiable set $\mathcal{N}_f$ of $f$ forms three bounded line segments, terminating at their intersections. However, each ReLU unit contributes a line of non-differentiability to $\mathcal{N}_{f'}$ that extends to infinity. The geometric incompatibility of bounded and unbounded lines makes exact representation impossible.
+
+For a fixed radius $r$, achieving $\epsilon$-approximation requires covering the terminating boundaries with ReLU units. Due to the unbounded nature of ReLU boundaries, the network must use an exponentially growing number of units as $\epsilon$ decreases to maintain accuracy throughout the region. Since the OptNet representation uses only $p$ parameters, this establishes the $\mathcal{O}(c^p)$ bound.
+\end{proof}
 
 \section{Differentiable Convex Optimization Layers}
 
@@ -557,6 +599,114 @@ This representation fundamentally changes how we handle derivatives. Rather than
 
 Note that the QP layer given in \citet{optnet} is a specific case of the convex optimization layers in \citet{differentiableconvexoptimizationlayers} and can be represented in DPP.
 
+\section{Implementation}
+
+The differentiable optimization layers in \citet{differentiableconvexoptimizationlayers} are easily implemented using the accompanying python library \texttt{cvxpylayers}, which support both PyTorch and TensorFlow. In particular, the authors show that the OptNet QP Layer 
+
+\[
+\begin{aligned}
+\text{minimize} \quad & \frac{1}{2} z^\top Q x + q^\top z \\
+\text{subject to} \quad & Az = b, \\
+                        & Gz \leq h,
+\end{aligned}
+\]
+
+where \( z \in \mathbb{R}^n \) is the optimization variable, and the problem data are \( Q \in \mathbb{R}^{n \times n} \succeq 0\) , \( q \in \mathbb{R}^n \), \( A \in \mathbb{R}^{m \times n} \), \( b \in \mathbb{R}^m \), \( G \in \mathbb{R}^{p \times n} \), and \( h \in \mathbb{R}^p \). We can implement this with:
+
+\begin{lstlisting}[language=Python]
+Q_sqrt = cp.Parameter((n, n))
+q = cp.Parameter(n)
+A = cp.Parameter((m, n))
+b = cp.Parameter(m)
+G = cp.Parameter((p, n))
+h = cp.Parameter(p)
+z = cp.Variable(n)
+obj = cp.Minimize(0.5*cp.sum_squares(Q_sqrt*z) + q.T @ z)
+cons = [A @ z == b, G @ z <= h]
+prob = cp.Problem(obj, cons)
+layer = CvxpyLayer(prob, parameters=[Q_sqrt, q, A, b, G, h], 
+                   variables=[z])
+\end{lstlisting}
+
+The efficiency is comparable to OptNet's original implementation but the implementation is far simpler. The original paper \citet{differentiableconvexoptimizationlayers} further demonstrates how simple layers (e.g. ReLU, Softmax) can be easily framed as optimization problems and implemented, and a full set of examples can be found at the GitHub. repository.\footnote{https://github.com/cvxgrp/cvxpylayers}
+
+\section{Applications}
+
+We examine several key domains where convex optimization layers provide novel capabilities beyond traditional neural architectures. We focus particularly on applications that exploit the layer's ability to enforce hard constraints while maintaining end-to-end differentiability.
+
+\subsection{Structured Prediction}
+
+A fundamental application of optimization layers is enforcing complex structural dependencies in prediction tasks. The seminal work of \citet{optnet} demonstrated this through the task of learning to solve Sudoku puzzles from input-output pairs alone. The architecture learns to represent the game's logical constraints through the optimization layer's constraint matrices $A$ and $G$, enabling strict enforcement of rules during inference without explicit encoding.
+
+More formally, consider a structured prediction task where outputs $y$ must satisfy some (potentially unknown) constraint set $\mathcal{C}$. Traditional approaches often rely on relaxations or penalties to approximately enforce constraints. In contrast, an optimization layer can represent this directly as:
+
+\begin{equation}
+\begin{aligned}
+\text{minimize}_y \quad & f(y; x, \theta) + \frac{1}{2}y^TQy \\
+\text{subject to} \quad & A(x,\theta)y = b(x,\theta) \\
+& G(x,\theta)y \leq h(x,\theta)
+\end{aligned}
+\end{equation}
+
+where $f$ captures the prediction objective and the constraints parametrized by $\theta$ implicitly learn $\mathcal{C}$ through training data. This formulation ensures predictions strictly satisfy the learned constraints while remaining differentiable.
+
+\subsection{Signal Processing}
+
+One natural application that \citet{optnet} touches on is signal processing, where optimization is already commonly used. Consider the task of signal denoising - removing noise from a corrupted signal to recover the original clean version. Traditional approaches like total variation (TV) denoising formulate this as a convex optimization problem:
+
+\begin{equation}
+\text{minimize}_z \quad \frac{1}{2}\|y - z\|_2^2 + \lambda\|Dz\|_1
+\end{equation}
+
+where $y$ is the noisy signal, $z$ is the denoised output, $D$ is a differencing operator, and $\lambda$ controls the strength of the smoothing. While effective, this requires manual tuning of $\lambda$ and uses a fixed differencing operator $D$.
+
+By embedding this optimization within a neural network, we can instead learn both the regularization strength $\lambda$ and the structure of the operator $D$ from data. Given pairs of clean and noisy signals, the network can be trained end-to-end to minimize reconstruction error. This allows the model to automatically adapt to the statistics of the noise and signal.
+
+
+\subsection{Linear Model Sensitivity to Adversarial Attacks}
+
+\citet{differentiableconvexoptimizationlayers} further show that the differentiable structure of optimization layers provides a powerful framework for analyzing how machine learning models behave under adversarial modifications to training data. The general idea is to model an adversary as someone who can deliberately perturb the training data to degrade the model's performance on a separate test set. This can be formulated as a bilevel optimization problem, where the outer problem identifies the most damaging perturbations, and the inner problem represents the process of retraining the model on the altered data. Mathematically, this is expressed as:
+
+\begin{equation}
+\begin{aligned}
+\text{minimize}_{\delta} \quad & L_{\text{test}}(\theta^*(\mathbf{x} + \delta)) \\
+\text{subject to} \quad & \|\delta\|_\infty \leq \epsilon, \\
+\text{where} \quad & \theta^*(\mathbf{x}) = \argmin_\theta \frac{1}{N}\sum_{i=1}^N \ell(\theta; x_i, y_i) + r(\theta).
+\end{aligned}
+\end{equation}
+
+Here, the inner optimization reflects the usual model training process, where the parameters \(\theta\) are learned to minimize a convex objective, such as a regularized loss function, on the (potentially perturbed) training data. The outer optimization represents the adversary’s goal of finding the perturbation \(\delta\), constrained by an \(\ell_\infty\)-norm bound \(\epsilon\), that maximizes the test loss \(L_{\text{test}}\). This framework can simulate real-world adversarial scenarios like data poisoning attacks.
+
+To better understand this, think of the model as being retrained on slightly "corrupted" versions of the training data. The adversary's goal is to subtly shift the training points—within a small allowable range—so that the model performs poorly on a separate test set. For instance, a logistic regression model might learn a decision boundary based on its training data. By tweaking certain training points in the direction of the gradient of the test loss, the adversary can "nudge" this boundary, leading to poorer classification accuracy on the test data.
+
+The adversarial perturbations are computed using the gradients of the test loss with respect to the training points. For each point, the adversary applies an update of the form:
+\[
+x_i \leftarrow x_i + \epsilon \, \text{sign}(\nabla_{x_i} L_{\text{test}}(\theta^*)),
+\]
+where \(\nabla_{x_i} L_{\text{test}}(\theta^*)\) indicates the direction in which the test loss increases the most with respect to \(x_i\). The adversary moves each training point slightly in this direction to maximize the negative impact on the model's performance.
+
+This bilevel structure is differentiable because we can compute gradients through both the inner training process and the outer optimization. Differentiable optimization layers make this possible by treating the solution to the inner problem (training) as a function of the input data, enabling efficient gradient computation. With this setup, one can precisely study how small data modifications propagate through the training process to affect the model's generalization performance, providing insights into both the vulnerabilities of the model and potential strategies for defense.
+
+
+\subsection{Future Directions}
+
+Several promising theoretical and applied directions remain to be explored:
+
+\textbf{Robust Machine Learning and AI:}
+Differentiable convex optimization layers can enhance the robustness of AI models by integrating adversarial defense mechanisms and uncertainty modeling directly into training. This enables better generalization to unseen data, resilience against data poisoning, and adaptability to real-world conditions where data is imperfect or dynamic.
+
+\textbf{Autonomous Systems and Control Optimization:}
+These layers are well-suited for optimizing control policies in robotics, self-driving vehicles, and other autonomous systems. They can solve trajectory planning and real-time decision-making problems under physical, safety, and operational constraints, ensuring efficiency and reliability in dynamic environments.
+
+\textbf{Dynamic Resource Management:}
+From energy systems like smart grids to telecommunications and logistics, differentiable convex layers can optimize the allocation of limited resources in real time. Their ability to handle constraints and dynamically adapt to changing conditions makes them ideal for applications requiring efficient resource scheduling or balancing.
+
+\textbf{Complex Decision-Making in Applied Domains:}
+Fields such as finance, healthcare, and physics-informed modeling can leverage these layers for solving constrained optimization problems within larger machine learning systems. Applications include portfolio management, personalized treatment plans, and systems obeying physical laws, where decision-making involves balancing competing objectives under strict constraints.
+
+The key advantage in these domains is the layer's ability to maintain feasibility with respect to domain constraints while enabling gradient-based learning of problem structure. This offers a powerful framework for combining domain knowledge with data-driven approaches in a mathematically rigorous way.
+
+
 
 \section{Limitations and Future Work}
 
@@ -564,7 +714,7 @@ We discuss the limitations of each framework and suggest possibilities for futur
 
 \subsection{Limitations of OptNet}
 
-While the OptNet framework exhibits several strengths, its practicality is limited by several factors. The first limitation is the cubic computational complexity associated with solving optimization problems exactly. This arises from the need to factorize the Karush-Kuhn-Tucker (KKT) system, which dominates the cost of solving the QPs. In practice, this makes the OptNet layer unsuitable for problems with high-dimensional decision variables or constraints. Specifically, the authors of \citet{optnet} note that the framework is generally practical for problems with fewer than 1000 hidden variables in the optimization layer, with substantially smaller limits required for applications demanding real-time computation. This stands in contrast to the quadratic complexity of standard feedforward neural network layers, such as fully connected or convolutional layers, highlighting a key bottleneck for scaling OptNet layers. Moreover, the original framework did not invoke structuress in the data matrices such as sparsity, which could possibly increase efficiency. 
+While the OptNet framework exhibits several strengths, its practicality is limited by several factors. The first limitation is the cubic computational complexity associated with solving optimization problems exactly. This arises from the need to factorize the Karush-Kuhn-Tucker (KKT) system, which dominates the cost of solving the QPs. In practice, this makes the OptNet layer unsuitable for problems with high-dimensional decision variables or constraints. Specifically, the authors of \citet{optnet} note that the framework is generally practical for problems with fewer than 1000 hidden variables in the optimization layer, with substantially smaller limits required for applications demanding real-time computation. This stands in contrast to the quadratic complexity of standard feedforward neural network layers, such as fully connected or convolutional layers, highlighting a key bottleneck for scaling OptNet layers. Moreover, the original framework did not invoke structures in the data matrices such as sparsity, which could possibly increase efficiency. 
 
 Another key problem is that tuning the parameters in an OptNet layer is highly nontrivial, primarily due to the invariances embedded in the parameter space. As an example, consider the equality constraint \(A x = b\), where \(A \in \mathbb{R}^{m \times n}\) and \(b \in \mathbb{R}^m\). If one row of \(A\), say the \(i\)-th row \(a_i^\top\), is scaled by a constant \(c > 0\), and simultaneously, the corresponding \(i\)-th entry in \(b\), \(b_i\), is scaled by the same constant \(c\), the constraint remains unchanged. Mathematically, the constraint 
 \[
@@ -576,35 +726,28 @@ transforms to
 \]
 which is equivalent because the scaling cancels out when checking feasibility. While this invariance does not affect the feasible set or optimal solution, it introduces challenges during training. Gradient-based optimization may attempt to update \(A\) and \(b\) along such invariant directions, leading to flat regions in the loss landscape where changes to \(A\) and \(b\) do not result in any change to the optimization layer’s output. This creates difficulty for gradient descent, as it struggles to identify informative updates, slowing convergence or requiring more aggressive tuning of hyperparameters such as learning rates. These challenges are compounded when multiple invariances interact, which can produce a degenerate parameter space that complicates training and necessitates careful initialization and optimization strategies to ensure stable learning. 
 
-The final limitation is that OptNet is geared towards a particular class of optimization problems (QPs), and moreover requires users to explicitly transform their problems into the appropriate canonical form. This is addressed in $\citet{differentiableconvexoptimizationlayers}$
+The final limitation is that OptNet is geared towards a particular class of optimization problems (QPs), and moreover requires users to explicitly transform their problems into the appropriate canonical form. This is addressed in \citet{differentiableconvexoptimizationlayers}.
 
 \subsection{Limitations of Differentiable Convex Optimization Layers (Agrawal et al.)}
 
-A fundamental limitation is that the approach hinges on solving a conic problem in each forward pass, and then differentiating through its solution map, incurring a computational cost that often scales at least cubicly in the problem dimension (e.g., factorizing KKT systems is typically $\mathcal{O}(n^3)$). This complexity can become impractical for large-scale instances, limiting the layer’s utility in real-time or high-throughput settings. Moreover, the method only applies to disciplined parametrized programs, which excludes a range of nonconvex or even certain convex formulations not easily expressed within their grammar. This modeling restriction may force significant and sometimes unnatural problem reformulations. Another issue arises at points of non-uniqueness or degeneracy in the solution: the solution map is not guaranteed to be differentiable, so the backward pass may produce heuristics rather than exact gradients. Finally, while the authors’ abstraction streamlines integration into standard deep learning frameworks, it still depends on robust conic solvers, which can fail, struggle with numerical ill-conditioning, or return only approximate solutions
+A fundamental limitation is that the approach hinges on solving a conic problem in each forward pass, and then differentiating through its solution map, incurring a computational cost that often scales at least cubicly in the problem dimension (e.g., factorizing KKT systems is typically $\mathcal{O}(n^3)$). This complexity can become impractical for large-scale instances, limiting the layer’s utility in real-time or high-throughput settings.
+
+Moreover, the method only applies to disciplined parametrized programs, which excludes a range of nonconvex or even certain convex formulations not easily expressed within their grammar. This modeling restriction may force significant and sometimes unnatural problem reformulations. Another issue arises at points of non-uniqueness or degeneracy in the solution: the solution map is not guaranteed to be differentiable, so the backward pass may produce heuristics rather than exact gradients. Finally, while the authors’ abstraction streamlines integration into standard deep learning frameworks, it still depends on robust conic solvers, which can fail, struggle with numerical ill-conditioning, or return only approximate solutions
 
 \subsection{Future Directions}
 
-A key direction is to develop solver routines that exploit problem structure—such as sparsity patterns, chordal decompositions, or block-diagonal forms—to drive down the cubic complexity currently incurred when factorizing KKT systems. Such improvements would directly benefit both general ASA-form layers and specialized frameworks like OptNet’s QP layers. Another immediate need is to extend the DPP grammar to handle a richer class of convex problems and certain structured nonconvex ones, reducing the overhead of manual, fragile re-formulations. On the theoretical side, ensuring stable and unique solutions—via mild regularization or strategic perturbations—would guarantee that gradients are well-defined and numerically stable, even at degenerate points. Finally, tighter coupling with advanced conic and QP solvers, including better warm-starting strategies, could improve solver reliability and runtime performance, making these approaches scalable to larger, more complex tasks.
-
-\section{Applications}
+A key direction is to develop solver routines that exploit problem structure—such as sparsity patterns of the problem data to drive down the cubic complexity currently incurred when factorizing KKT systems. Such improvements would directly benefit both general ASA-form layers and specialized frameworks like OptNet’s QP layers. Another immediate need is to extend the DPP grammar to handle a richer class of convex problems and certain structured nonconvex ones, reducing the overhead of manual, fragile re-formulations. On the theoretical side, ensuring stable and unique solutions—via mild regularization or strategic perturbations—would guarantee that gradients are well-defined and numerically stable, even at degenerate points. Finally, tighter coupling with advanced conic and QP solvers, including better warm-starting strategies, could improve solver reliability and runtime performance, making these approaches scalable to larger, more complex tasks.
 
 
+\section{Conclusion}
 
-\subsection{Structured Prediction}
-\subsection{Control Systems}
-\subsection{Financial Optimization}
-\subsection{Machine Learning Models}
+This survey has examined the theoretical foundations and practical implementations of differentiable optimization layers in neural architectures. Starting from quadratic programming layers, we traced the evolution to general convex optimization layers through key theoretical advances in differentiating through optimization problems. The development progressed from argmin differentiation to the more general cone program approach, enabling efficient handling of broader constraint classes.
 
-\section{Future Directions}
-\subsection{Current Limitations}
-\subsection{Open Problems}
-\subsection{Research Opportunities}
+Our analysis has revealed both significant progress and remaining challenges. While robust mathematical frameworks now exist for incorporating hard constraints in end-to-end trainable architectures, the cubic computational complexity of core operations remains a key bottleneck for scaling to high-dimensional problems. The parameter space exhibits problematic invariances that complicate training, and extensions beyond convex settings remain largely unexplored.
 
-\begin{ack}
-Acknowledgments go here.
-\end{ack}
+Looking forward, several promising directions emerge: more efficient solvers exploiting problem structure, extensions of the DPP grammar to broader problem classes, and deeper theoretical understanding of optimization-neural network interactions. As the field matures, we expect optimization layers to become an increasingly essential tool in deep learning, particularly for applications demanding hard constraints and structured predictions.
+\newpage
 
-\small
 \bibliographystyle{plainnat}
 \bibliography{references}
 
@@ -612,9 +755,6 @@ Acknowledgments go here.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\appendix
-
-\section{Appendix / supplemental material}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

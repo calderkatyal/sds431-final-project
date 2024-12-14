@@ -1,0 +1,5 @@
+\documentclass{article}
+
+
+
+\textbf{Argmin Differentiation:} Computes gradients of solutions to optimization problems. \\ \textbf{Setup:} Given an optimization problem: \[ g(x) = \argmin_{y} f(x, y) \] where \(f(x, y)\) is continuous and twice-differentiable. \\ \textbf{Unconstrained Case:} \\ Gradient is computed using implicit differentiation: \[ g'(x) = -f_{YY}^{-1} f_{XY} \] where \(f_{YY}\) is the second derivative w.r.t. \(y\), and \(f_{XY}\) is the mixed derivative. \\ \textbf{Equality-Constrained Case:} \\ Constraints \(Ay = b\) are handled by null-space projection: \[ g'(x) = -F(F^T f_{YY} F)^{-1} F^T f_{XY} \] where \(F\) is a matrix spanning the null space of \(A\). \\ \textbf{Inequality-Constrained Case:} \\ Approximation uses a barrier function: \[ g'(x) \approx -(tf_{YY} + \phi_{YY})^{-1}(tf_{XY} + \phi_{XY}) \] where \(\phi(x, y)\) is the log-barrier function for constraints.
